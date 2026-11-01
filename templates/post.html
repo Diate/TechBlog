@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}} · Tech Blog</title>
+  <!-- TÓM TẮT: 1 đến 2 câu, hiện ở trang chủ (cắt sau hai dòng). -->
+  <meta name="description" content="">
+  <!--
+    ẢNH BÌA (tuỳ chọn). Mặc định tự sinh theo chủ đề (tag) đầu tiên của bài. Muốn đổi thì chọn một trong hai:
+      chọn mẫu có sẵn:  <meta name="cover" content="bars">   (bars, tree, graph, wave, grid, blocks, packets, curve)
+      vẽ tay ngay trong file này, SVG tỉ lệ 16:9, dùng được các lớp ink, soft, pale, line, hair, thick:
+        <template id="cover"><svg viewBox="0 0 320 180"> ... </svg></template>
+  -->
+  <!-- Đường dẫn luôn tương đối. Bài nằm ở posts/ nên cần ../ để lên gốc site. -->
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script src="../assets/js/main.js"></script>
+  <style>
+    /* CSS riêng của topic này (nếu cần). Dùng biến của theme như var(--accent), đừng viết mã màu. */
+  </style>
+</head>
+<body>
+  <!--
+    MỖI TOPIC LÀ MỘT FILE NÀY, không cần sửa chỗ nào khác. Trang chủ tự đọc từ chính file:
+      tên file (bỏ .html)       slug trong địa chỉ
+      thẻ h1                    tiêu đề
+      thẻ time (datetime)       ngày đăng, dạng YYYY-MM-DD
+      các span #tag             chủ đề, nằm trong .post-meta; chủ đề đầu tiên quyết định mẫu ảnh bìa
+      meta description          tóm tắt (ở phần head)
+    File có tên bắt đầu bằng _ là bản nháp: không hiện ở trang chủ và không được deploy.
+    Chi tiết: templates/GUIDE.md. Xem từng thành phần chạy thật: templates/components/
+    Khung bài: mở đầu, mô phỏng, ý tưởng, cách làm, so sánh, file code. Bỏ phần không dùng, đừng đảo thứ tự.
+    Cần thêm sơ đồ khối, sơ đồ tuần tự, bảng hay ảnh rộng thì chép HTML từ templates/components/.
+  -->
+  <main>
+    <article class="container post">
+      <h1>{{TITLE}}</h1>
+      <p class="post-meta">
+        <time datetime="{{DATE}}">{{DATE}}</time>
+        <span>#tag</span>
+      </p>
+
+      <!-- 1. Đoạn mở đầu (tự to hơn): 1 đến 2 câu, bài này cho người đọc điều gì. -->
+      <p>Đoạn mở đầu: bài này giải thích điều gì và vì sao nó đáng quan tâm.</p>
+
+      <!-- 2. Mô phỏng đứng ngay sau đoạn mở đầu. aria-label thành tiêu đề của khung, hãy đặt cho có nghĩa. -->
+      <section class="sim" aria-label="Mô phỏng">
+        <div class="sim-controls">
+          <button class="btn primary" id="toggle" type="button">Chạy</button>
+        </div>
+        <canvas id="stage"></canvas>
+      </section>
+
+      <!-- 3. Ý tưởng cốt lõi. Nhiều phần nối với nhau thì thêm sơ đồ khối ở đây. -->
+      <h2>Ý tưởng</h2>
+      <p>Giải thích ý chính bằng ngôn ngữ thường, mỗi mục một ý.</p>
+      <div class="note">
+        <p>Ghi chú: lưu ý hoặc ngoại lệ nằm ngoài mạch chính. Không quá hai cái mỗi bài.</p>
+      </div>
+
+      <!-- 4. Cách làm. Nhiều bên trao đổi theo thứ tự thì thêm sơ đồ tuần tự ở đây. -->
+      <h2>Cách làm</h2>
+      <p>Code của mô phỏng nằm trong thẻ <code>&lt;script id="sim-code"&gt;</code> ở cuối file. Đoạn chạy thật cũng là đoạn được hiển thị và tải về dưới đây, nên chỉ có một bản để sửa:</p>
+      <pre><code data-from="#sim-code" data-filename="sim.js"></code></pre>
+
+      <p>Vài dòng ngắn thì viết thẳng trong HTML (nhớ escape <code>&lt;</code> thành <code>&amp;lt;</code>):</p>
+      <pre><code class="language-js" data-filename="inline.js">console.log("hello");</code></pre>
+
+      <!-- Tuỳ chọn: hình minh hoạ. Vẽ bằng SVG ngay trong file (có role="img" và mô tả); ảnh chụp thì đặt file vào assets/img/ rồi dùng img src="../assets/img/ten.png" kèm alt. Thêm class="wide" vào figure để rộng hơn. -->
+      <figure>
+        <svg viewBox="0 0 640 320" role="img" aria-label="Mô tả hình cho người dùng đọc màn hình">
+          <rect width="640" height="320" fill="currentColor" opacity=".08"/>
+          <text x="320" y="168" text-anchor="middle" fill="currentColor" opacity=".6" style="font: 20px var(--mono)">Hình minh hoạ</text>
+        </svg>
+        <figcaption>Chú thích hình.</figcaption>
+      </figure>
+
+      <!-- 5. Tuỳ chọn: bảng so sánh số liệu (mẫu trong templates/components/). -->
+
+      <!-- 6. File code của bài -->
+      <h2>File code của bài</h2>
+      <ul class="code-links">
+        <li><a data-from="#sim-code" download="sim.js">sim.js <small>trình mô phỏng</small></a></li>
+      </ul>
+    </article>
+  </main>
+
+  <!-- Code của bài: chạy thật ở đây, đồng thời là đoạn được hiển thị và tải về. Chỉ để hiển thị mà không chạy thì dùng type="text/plain". -->
+  <script id="sim-code">
+    /* Khung mô phỏng cho "{{TITLE}}": canvas + vòng lặp requestAnimationFrame + nút chạy/dừng.
+     * Thay phần update() và draw() bằng logic của bạn.
+     */
+    (function () {
+      const canvas = document.getElementById('stage');
+      const ctx = canvas.getContext('2d');
+      const toggle = document.getElementById('toggle');
+
+      let running = false;
+      let last = 0;
+      let t = 0; // thời gian mô phỏng, tính bằng giây
+
+      // Canvas sắc nét trên màn hình retina: kích thước thật = kích thước CSS × devicePixelRatio.
+      function resize() {
+        const dpr = window.devicePixelRatio || 1;
+        const { width, height } = canvas.getBoundingClientRect();
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        draw();
+      }
+
+      function update(dt) {
+        t += dt;
+      }
+
+      function draw() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+        const x = (Math.sin(t * 2) * 0.5 + 0.5) * (w - 40) + 20;
+        ctx.beginPath();
+        ctx.arc(x, h / 2, 14, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function frame(now) {
+        if (!running) return;
+        update(Math.min((now - last) / 1000, 0.1));
+        last = now;
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      toggle.addEventListener('click', () => {
+        running = !running;
+        toggle.textContent = running ? 'Tạm dừng' : 'Chạy';
+        if (running) {
+          last = performance.now();
+          requestAnimationFrame(frame);
+        }
+      });
+
+      window.addEventListener('resize', resize);
+      resize();
+    })();
+  </script>
+</body>
+</html>

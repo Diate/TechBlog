@@ -78,10 +78,34 @@
     document.body.append(footer);
   }
 
+  // ---------- Code lấy từ chính trang ----------
+  // Code của bài nằm trong <script id="..."> ngay trong file bài: đoạn chạy thật cũng là đoạn được hiển thị
+  // và tải về, nên chỉ có một bản để sửa. Dùng <script type="text/plain"> nếu chỉ để hiển thị, không chạy.
+  const dedent = (text) => {
+    const lines = text.split('\n');
+    const indents = lines.filter((l) => l.trim()).map((l) => l.match(/^[ \t]*/)[0].length);
+    const cut = indents.length ? Math.min(...indents) : 0;
+    return lines.map((l) => l.slice(cut)).join('\n').trim();
+  };
+  const sourceText = (selector) => {
+    const node = document.querySelector(selector);
+    return node ? dedent(node.textContent) : null;
+  };
+  const blobUrl = (text) => URL.createObjectURL(new Blob([text + '\n'], { type: 'text/plain;charset=utf-8' }));
+
+  // <a data-from="#id" download="ten.js">  -> link tải về nội dung của #id
+  function enhanceDownloads() {
+    document.querySelectorAll('a[data-from]').forEach((a) => {
+      const text = sourceText(a.dataset.from);
+      if (text != null) a.href = blobUrl(text);
+    });
+  }
+
   // ---------- Khối code ----------
-  // <pre><code class="language-js">…</code></pre>                  -> tô màu
-  // <pre><code data-src="code/a.js"></code></pre>                  -> tự nạp file, kèm thanh tên file + nút tải
-  // <pre><code data-filename="a.js">…</code></pre>                 -> hiện tên file
+  // <pre><code class="language-js">…</code></pre>                                  -> tô màu
+  // <pre><code data-from="#id" data-filename="a.js"></code></pre>                  -> lấy code từ phần tử #id, kèm thanh tên file + nút tải
+  // <pre><code data-src="code/a.js"></code></pre>                                  -> nạp từ một file riêng (ít dùng)
+  // <pre><code data-filename="a.js">…</code></pre>                                 -> hiện tên file
   async function enhanceCode() {
     const blocks = [...document.querySelectorAll('pre > code')];
     if (!blocks.length) return;
@@ -89,19 +113,25 @@
     const loaded = blocks.map(async (code) => {
       const pre = code.parentElement;
       const src = code.dataset.src;
+      const from = code.dataset.from;
+      const inline = from ? sourceText(from) : null;
       const name = code.dataset.filename || (src && src.split('/').pop());
       const wrap = el('div', { class: 'code' });
       pre.replaceWith(wrap);
 
       if (name) {
         const bar = el('div', { class: 'code-bar' }, el('span', {}, name));
-        if (src) bar.append(el('a', { href: src, download: name }, 'Tải về'));
+        if (inline != null) bar.append(el('a', { href: blobUrl(inline), download: name }, 'Tải về'));
+        else if (src) bar.append(el('a', { href: src, download: name }, 'Tải về'));
         wrap.append(bar);
       }
       wrap.append(pre);
       pre.tabIndex = 0; // vùng cuộn được phải focus được bằng bàn phím
 
-      if (src) {
+      if (from) {
+        code.textContent = inline ?? `// Không tìm thấy phần tử ${from} chứa code.`;
+        if (!code.className && inline != null && name) code.className = 'language-' + (name.split('.').pop() || 'plaintext');
+      } else if (src) {
         if (!code.className) code.className = 'language-' + (name.split('.').pop() || 'plaintext');
         try {
           const res = await fetch(src);
@@ -141,6 +171,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     injectChrome();
+    enhanceDownloads();
     enhanceCode();
     enhanceDiagrams();
   });

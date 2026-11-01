@@ -1,10 +1,11 @@
 /* Ảnh bìa sinh từ code cho trang chủ: COVERS.render(post) -> phần tử <svg> (hoặc <img>).
  *
- * Chọn hình theo thứ tự:
- *   1. post.cover là file ảnh/svg ("cover.svg")  -> <img> lấy từ thư mục bài
- *   2. post.cover là tên mẫu ("bars", "tree"...)  -> mẫu đó
- *   3. tag đầu tiên có trong TOPIC_MOTIF          -> mẫu của chủ đề
- *   4. còn lại                                    -> mẫu chọn theo slug
+ * Chọn hình theo thứ tự (thông tin lấy từ file bài, xem scripts/lib/posts-index.mjs):
+ *   1. post.coverSvg: <template id="cover"><svg>…</svg></template> trong file bài -> SVG vẽ tay, có thể dùng các lớp .ink .soft .pale .line .hair
+ *   2. post.cover là đường dẫn ảnh ("assets/img/a.png", tính từ gốc site)         -> <img>
+ *   3. post.cover là tên mẫu ("bars", "tree"...) từ <meta name="cover">             -> mẫu đó
+ *   4. tag đầu tiên có trong TOPIC_MOTIF                                          -> mẫu của chủ đề
+ *   5. còn lại                                                                    -> mẫu chọn theo slug
  * Hình chỉ phụ thuộc slug (RNG gieo từ slug) nên mỗi bài luôn ra đúng một hình.
  * Màu lấy từ biến CSS (xem .cover trong main.css), nên đổi theo giao diện.
  */
@@ -206,10 +207,22 @@
   const IMAGE = /\.(svg|png|jpe?g|webp|avif|gif)$/i;
 
   function render(post) {
+    if (post.coverSvg) {
+      const holder = document.createElement('template');
+      holder.innerHTML = post.coverSvg;
+      const svg = holder.content.querySelector('svg');
+      if (svg) {
+        svg.classList.add('cover');
+        svg.setAttribute('aria-hidden', 'true'); // trang trí: tiêu đề bài đã nằm ngay cạnh
+        svg.setAttribute('focusable', 'false');
+        if (!svg.style.getPropertyValue('--c')) svg.style.setProperty('--c', 'var(--accent)');
+        return svg;
+      }
+    }
     if (IMAGE.test(post.cover || '')) {
       const img = document.createElement('img');
       img.className = 'cover';
-      img.src = `posts/${post.slug}/${post.cover}`;
+      img.src = post.cover;
       img.alt = ''; // trang trí: tiêu đề bài đã nằm ngay cạnh
       img.loading = 'lazy';
       img.decoding = 'async';

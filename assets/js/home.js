@@ -1,4 +1,5 @@
-/* Dựng danh sách bài, ô tìm kiếm, bộ lọc chủ đề và nút đổi kiểu hiển thị ở trang chủ từ window.POSTS (assets/js/posts.js). */
+/* Dựng danh sách bài, ô tìm kiếm, bộ lọc chủ đề và nút đổi kiểu hiển thị ở trang chủ.
+ * window.POSTS do assets/posts-index.js cung cấp; file đó tự sinh từ posts/*.html (xem scripts/lib/posts-index.mjs). */
 (function () {
   const posts = (window.POSTS || []).slice().sort((a, b) => b.date.localeCompare(a.date));
   const list = document.getElementById('post-list');
@@ -78,7 +79,7 @@
         h('p', { class: 'entry-meta' },
           h('span', { class: 'entry-num' }, numberOf(p)),
           h('time', { datetime: p.date }, p.date)),
-        h('h3', { class: 'entry-title' }, h('a', { href: `posts/${p.slug}/` }, p.title)),
+        h('h3', { class: 'entry-title' }, h('a', { href: `posts/${p.slug}.html` }, p.title)),
         ...(p.summary ? [h('p', { class: 'entry-summary' }, p.summary)] : [])),
       h('div', { class: 'entry-cover' }, window.COVERS.render(p)),
       h('p', { class: 'entry-tags' }, ...(p.tags || []).map((t) => h('span', {}, '#' + t))));
@@ -103,7 +104,9 @@
     const filtered = [activeTag && `Chủ đề ${activeTag}`, query.trim() && `Tìm "${query.trim()}"`].filter(Boolean);
     announce(`${filtered.length ? filtered.join(', ') + ': ' : ''}${shown.length} bài viết`);
     if (!shown.length) {
-      list.replaceChildren(posts.length
+      list.replaceChildren(!window.POSTS
+        ? h('p', { class: 'empty' }, 'Chưa có danh sách bài. Hãy chạy trang qua npm run dev (hoặc npm run build), đừng mở thẳng file index.html.')
+        : posts.length
         ? h('p', { class: 'empty' }, 'Không có bài nào khớp.', h('button', { type: 'button', onclick: reset }, 'Xoá bộ lọc'))
         : h('p', { class: 'empty' }, 'Chưa có bài viết nào.'));
       return;

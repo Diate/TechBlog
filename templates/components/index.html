@@ -28,6 +28,17 @@
 
       <p>Khung mô phỏng <code>.sim</code> không có ở đây vì nó cần JS để chạy. Bản chạy thật nằm sẵn trong bài mới: <code>npm run new -- ten-bai "Tiêu đề"</code>.</p>
 
+      <h2>Thông tin của bài</h2>
+      <p>Mỗi topic là một file trong <code>posts/</code>, và trang chủ đọc mọi thông tin ngay từ file đó: tiêu đề từ <code>&lt;h1&gt;</code>, ngày từ <code>&lt;time&gt;</code>, chủ đề từ các <code>&lt;span&gt;#tag&lt;/span&gt;</code> trong <code>.post-meta</code> (chủ đề đầu tiên quyết định mẫu ảnh bìa), tóm tắt từ <code>&lt;meta name="description"&gt;</code>. Tên file là địa chỉ của bài. Thêm file là bài tự xuất hiện, không phải đăng ký ở đâu.</p>
+      <pre><code class="language-html" data-filename="posts/ten-bai.html">&lt;meta name="description" content="Tóm tắt một đến hai câu, hiện ở trang chủ."&gt;
+...
+&lt;h1&gt;Tiêu đề bài&lt;/h1&gt;
+&lt;p class="post-meta"&gt;
+  &lt;time datetime="2026-11-01"&gt;2026-11-01&lt;/time&gt;
+  &lt;span&gt;#thuật toán&lt;/span&gt;
+  &lt;span&gt;#simulation&lt;/span&gt;
+&lt;/p&gt;</code></pre>
+
       <h2>Chữ trong bài</h2>
       <p>Đoạn đầu tiên sau <code>.post-meta</code> tự thành đoạn mở đầu (chữ to hơn). Mỗi <code>&lt;h2&gt;</code> tự được đánh số ở lề trái, không cần viết số tay. Dùng <code>&lt;code&gt;</code> cho tên hàm, biến, file; thuật ngữ tiếng Anh giữ nguyên.</p>
       <div data-demo="inner">
@@ -55,20 +66,30 @@
         </tbody>
       </table>
 
-      <h2>Ảnh</h2>
-      <p>Ảnh thường nằm trong cột chữ; thêm <code>class="wide"</code> để mở rộng sang phải như khung mô phỏng. Luôn có <code>alt</code> mô tả nội dung ảnh, và chép file ảnh vào <code>images/</code> của bài (ở đây dùng ảnh mẫu nên đường dẫn là <code>../post/images/</code>, hãy đổi thành <code>images/ten.png</code>).</p>
+      <h2>Hình và ảnh</h2>
+      <p>Hình minh hoạ nên vẽ bằng SVG ngay trong file bài, để topic vẫn chỉ là một file; luôn có <code>role="img"</code> và mô tả (<code>aria-label</code>). Ảnh chụp thì đặt file vào <code>assets/img/</code> rồi dùng <code>&lt;img src="../assets/img/ten.png" alt="..."&gt;</code> với <code>alt</code> mô tả nội dung ảnh. Thêm <code>class="wide"</code> vào <code>&lt;figure&gt;</code> để mở rộng sang phải như khung mô phỏng.</p>
       <figure data-demo>
-        <img src="../post/images/placeholder.svg" alt="Mô tả ảnh cho người dùng đọc màn hình" width="640" height="320" loading="lazy">
+        <svg viewBox="0 0 640 320" role="img" aria-label="Mô tả hình cho người dùng đọc màn hình">
+          <rect width="640" height="320" fill="currentColor" opacity=".08"/>
+          <text x="320" y="168" text-anchor="middle" fill="currentColor" opacity=".6" style="font: 20px var(--mono)">Hình minh hoạ</text>
+        </svg>
         <figcaption>Chú thích ảnh.</figcaption>
       </figure>
       <figure class="wide" data-demo>
-        <img src="../post/images/placeholder.svg" alt="Mô tả ảnh cho người dùng đọc màn hình" width="640" height="320" loading="lazy">
+        <svg viewBox="0 0 640 320" role="img" aria-label="Mô tả hình cho người dùng đọc màn hình">
+          <rect width="640" height="320" fill="currentColor" opacity=".08"/>
+          <text x="320" y="168" text-anchor="middle" fill="currentColor" opacity=".6" style="font: 20px var(--mono)">Hình minh hoạ</text>
+        </svg>
         <figcaption>Ảnh rộng, dùng khi chi tiết trong ảnh cần chỗ.</figcaption>
       </figure>
 
       <h2>Khối code</h2>
-      <p>Có hai cách. Cách thứ nhất nạp từ file trong <code>code/</code>, tự hiện tên file kèm nút tải, và chỉ có một bản code để sửa (nên ưu tiên). Ở đây nạp file mẫu nên đường dẫn là <code>../post/code/</code>, hãy đổi thành <code>code/ten-file.js</code>.</p>
-      <pre data-demo><code data-src="../post/code/example.js"></code></pre>
+      <p>Có hai cách. Cách thứ nhất (nên ưu tiên) lấy code từ một thẻ <code>&lt;script id="..."&gt;</code> ngay trong file: đoạn chạy thật cũng là đoạn được hiển thị và tải về, nên chỉ có một bản để sửa. Dùng <code>&lt;script type="text/plain" id="..."&gt;</code> nếu chỉ để hiển thị mà không chạy.</p>
+      <pre data-demo><code data-from="#demo-code" data-filename="ten-file.js"></code></pre>
+      <p>Link tải về cho cùng đoạn code, dùng trong danh sách "File code của bài":</p>
+      <ul class="code-links" data-demo>
+        <li><a data-from="#demo-code" download="ten-file.js">ten-file.js <small>mô tả ngắn</small></a></li>
+      </ul>
       <p>Cách thứ hai viết thẳng trong HTML, dành cho vài dòng ngắn. Nhớ escape <code>&lt;</code> thành <code>&amp;lt;</code>.</p>
       <pre data-demo><code class="language-js" data-filename="ten-file.js">const tong = (a, b) => a + b;</code></pre>
 
@@ -149,16 +170,18 @@
       </figure>
 
       <h2>Ảnh bìa</h2>
-      <p>Ảnh bìa ở trang chủ tự sinh theo tag đầu tiên của bài. Đây là tám mẫu có sẵn; chọn mẫu khác bằng <code>cover</code> trong <code>assets/js/posts.js</code>, hoặc tự vẽ một file SVG (hay ảnh) tỉ lệ 16:9 đặt trong thư mục bài rồi ghi tên file vào <code>cover</code>. Bảng tag → mẫu nằm ở đầu <code>assets/js/covers.js</code>.</p>
+      <p>Ảnh bìa ở trang chủ tự sinh theo chủ đề đầu tiên của bài, nên thường không phải làm gì. Đây là tám mẫu có sẵn. Muốn chọn mẫu khác thì thêm <code>&lt;meta name="cover"&gt;</code> vào <code>&lt;head&gt;</code> của bài; muốn tự vẽ thì đặt một SVG tỉ lệ 16:9 trong <code>&lt;template id="cover"&gt;</code> ngay trong file (dùng được các lớp <code>ink</code>, <code>soft</code>, <code>pale</code>, <code>line</code>, <code>hair</code>, <code>thick</code>). Bảng chủ đề → mẫu nằm ở đầu <code>assets/js/covers.js</code>.</p>
       <div class="cover-grid" id="cover-grid"></div>
-      <pre><code class="language-js" data-filename="assets/js/posts.js">{
-  slug: "ten-bai",
-  title: "Tiêu đề bài",
-  date: "2026-11-01",
-  tags: ["thuật toán", "simulation"],  // tag đầu tiên quyết định mẫu bìa
-  summary: "Một đến hai câu, hiện ở danh sách (cắt sau hai dòng).",
-  cover: "bars",                       // tuỳ chọn: tên mẫu, hoặc "cover.svg"
-},</code></pre>
+      <pre><code class="language-html" data-filename="posts/ten-bai.html">&lt;!-- chọn mẫu có sẵn (đặt trong head): --&gt;
+&lt;meta name="cover" content="bars"&gt;
+
+&lt;!-- hoặc vẽ tay (đặt trong body, không hiện trong bài): --&gt;
+&lt;template id="cover"&gt;
+  &lt;svg viewBox="0 0 320 180"&gt;
+    &lt;rect class="ink" x="40" y="60" width="60" height="80"/&gt;
+    &lt;path class="line thick" d="M40 150H280"/&gt;
+  &lt;/svg&gt;
+&lt;/template&gt;</code></pre>
 
       <h2>Màu</h2>
       <p>Không thêm màu mới và không viết mã màu trong bài: luôn dùng biến, để sáng và tối đều đúng. Trong mô phỏng, giữ nghĩa cố định để mọi bài đọc giống nhau: chưa xử lý là <code>--faint</code>, đang xét là <code>--indigo</code>, vừa thay đổi là <code>--accent</code>, xong là <code>--green</code>.</p>
@@ -179,6 +202,14 @@
     </article>
   </main>
 
+  <script type="text/plain" id="demo-code">
+    // Ví dụ code được hiển thị bằng data-from (không chạy vì type="text/plain").
+    export function fibonacci(n) {
+      let [a, b] = [0, 1];
+      for (let i = 0; i < n; i++) [a, b] = [b, a + b];
+      return a;
+    }
+  </script>
   <script src="../../assets/js/covers.js"></script>
   <script>
     // Với mỗi [data-demo], chép HTML của chính nó thành một khối code ngay bên dưới.

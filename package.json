@@ -5,6 +5,7 @@
   "description": "Blog kỹ thuật tĩnh (HTML + CSS + JS), deploy lên GitHub Pages",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "new": "node scripts/new-post.mjs"
+    "new": "node scripts/new-post.mjs",
+    "build": "node scripts/build-site.mjs"
   }
 }

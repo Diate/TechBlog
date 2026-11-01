@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPosts, postsScript, INDEX_URL } from './lib/posts-index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT) || 8000;
@@ -30,13 +31,31 @@ async function resolveFile(urlPath) {
   const rel = decodeURIComponent(urlPath.split('?')[0]);
   const file = path.join(root, path.normalize(rel));
   if (file !== root && !file.startsWith(root + path.sep)) return null; // chặn ../
-  const info = await stat(file).catch(() => null);
+  let info = await stat(file).catch(() => null);
+  if (!info && !path.extname(file)) { // /posts/ten-bai -> posts/ten-bai.html, như GitHub Pages
+    const withHtml = file + '.html';
+    info = await stat(withHtml).catch(() => null);
+    if (info) return withHtml;
+  }
   if (!info) return null;
   return info.isDirectory() ? path.join(file, 'index.html') : file;
 }
 
+// Danh sách bài được sinh lại mỗi lần tải trang, nên thêm/sửa file trong posts/ là thấy ngay (F5).
+let lastReport = '';
+async function postsIndex() {
+  const { posts, errors, warnings } = await readPosts(root);
+  const report = [...errors.map((e) => `LỖI      ${e}`), ...warnings.map((w) => `cảnh báo  ${w}`)].join('\n');
+  if (report !== lastReport) { lastReport = report; if (report) console.warn(report); }
+  return postsScript(posts);
+}
+
 createServer(async (req, res) => {
   try {
+    if (new URL(req.url, 'http://localhost').pathname === INDEX_URL) {
+      res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
+      return res.end(await postsIndex());
+    }
     const file = await resolveFile(req.url);
     const body = file && (await readFile(file).catch(() => null));
     if (!body) {

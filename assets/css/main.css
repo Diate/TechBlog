@@ -189,10 +189,10 @@ input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--a
 .hero { padding: clamp(2.5rem, 7vw, 5rem) 0 clamp(2.25rem, 5vw, 3.75rem); text-align: center; }
 .hero-kicker { margin: 0 0 clamp(.5rem, 1.5vw, 1rem); font: italic 1.125rem/1.4 var(--font); color: var(--muted); }
 .hero h1 { display: flex; flex-direction: column; align-items: center; font-weight: 400; text-transform: uppercase; text-wrap: nowrap; }
-.h1-light { font: 400 clamp(1.75rem, .4rem + 6.4vw, 5.5rem)/1.05 var(--font); letter-spacing: -0.02em; }
-.h1-heavy { font: 800 clamp(3rem, .5rem + 11vw, 9rem)/1.05 var(--display); letter-spacing: -0.04em; }
+.h1-light { font: 400 clamp(2.75rem, .5rem + 11vw, 9rem)/1 var(--font); letter-spacing: -0.02em; }
+.h1-heavy { margin-top: -.1em; font: 800 clamp(4.5rem, 1rem + 19vw, 13rem)/1 var(--display); letter-spacing: -0.04em; }
 .h1-heavy [aria-hidden] { color: var(--accent); }
-.hero-note { margin: clamp(1rem, 2.5vw, 1.75rem) 0 0; font: .75rem/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.hero-note { max-width: 30rem; margin: clamp(1rem, 2.5vw, 1.75rem) auto 0; text-wrap: balance; font: .75rem/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 
 /* Khối danh mục luôn tối ở cả hai theme: khai báo bộ màu tối riêng, các thành phần bên trong tự ăn theo. */
 .catalog {
