@@ -1,0 +1,441 @@
+/* ===== Fonts (tự host, xem assets/fonts/LICENSE.txt) ===== */
+@font-face {
+  font-family: "Newsreader"; font-style: normal; font-weight: 400 600; font-display: swap;
+  src: url("../fonts/newsreader-roman-vietnamese.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "Newsreader"; font-style: normal; font-weight: 400 600; font-display: swap;
+  src: url("../fonts/newsreader-roman-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Newsreader"; font-style: italic; font-weight: 400; font-display: swap;
+  src: url("../fonts/newsreader-italic-400-vietnamese.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "Newsreader"; font-style: italic; font-weight: 400; font-display: swap;
+  src: url("../fonts/newsreader-italic-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/plex-mono-roman-400-vietnamese.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../fonts/plex-mono-roman-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../fonts/plex-mono-roman-500-vietnamese.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "Plex Mono"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../fonts/plex-mono-roman-500-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Archivo"; font-style: normal; font-weight: 800; font-display: swap;
+  src: url("../fonts/archivo-800-vietnamese.woff2") format("woff2");
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: "Archivo"; font-style: normal; font-weight: 800; font-display: swap;
+  src: url("../fonts/archivo-800-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ===== Theme =====
+ * Giấy + mực + một màu nhấn (đỏ son). Ba màu phụ (indigo, green, ochre) chỉ dùng cho
+ * sơ đồ mô phỏng và tô màu code, không dùng để trang trí.
+ * Giá trị tối được khai báo hai lần (theo hệ thống và theo nút đổi theme), hãy sửa cả hai.
+ */
+:root {
+  color-scheme: light dark;
+  --bg: #f5f1e8;
+  --surface: #ebe5d6;          /* nền tấm mô phỏng, khối code, code inline */
+  --text: #1f1b16;
+  --muted: #6b6254;
+  --faint: #8a8170;            /* chỉ cho đồ họa (cột chưa xử lý), không dùng cho chữ */
+  --border: #d6cdba;           /* đường kẻ mảnh */
+  --rule: #1f1b16;             /* đường kẻ đậm */
+  --accent: #b5391a;
+  --accent-contrast: #fbf8f1;
+  --indigo: #2b4c9b;
+  --green: #1f6a52;
+  --ochre: #8a5a00;
+
+  --font: "Newsreader", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --mono: "Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;   /* chỉ cho dòng chữ đậm cỡ lớn ở đầu trang chủ */
+
+  --page: 72rem;               /* bề rộng tối đa của trang */
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --margin: 11rem;             /* cột lề trái của bài viết: số mục, ngày đăng */
+  --measure: 28em;             /* bề rộng cột chữ của bài, khoảng 68 ký tự/dòng với Newsreader */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151310;
+    --surface: #1e1b17;
+    --text: #ece6d9;
+    --muted: #a39a8a;
+    --faint: #7a7163;
+    --border: #363029;
+    --rule: #ece6d9;
+    --accent: #ee7a55;
+    --accent-contrast: #151310;
+    --indigo: #8fb0ee;
+    --green: #6fcaa8;
+    --ochre: #e2b45f;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #151310;
+  --surface: #1e1b17;
+  --text: #ece6d9;
+  --muted: #a39a8a;
+  --faint: #7a7163;
+  --border: #363029;
+  --rule: #ece6d9;
+  --accent: #ee7a55;
+  --accent-contrast: #151310;
+  --indigo: #8fb0ee;
+  --green: #6fcaa8;
+  --ochre: #e2b45f;
+}
+:root[data-theme="light"] { color-scheme: light; }
+
+/* ===== Base ===== */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem)/1.65 var(--font);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+main { flex: 1; }
+main:focus { outline: none; }
+h1, h2, h3 { font-weight: 500; text-wrap: balance; margin: 0; }
+b, strong { font-weight: 600; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 0.2em; transition: color .15s, text-decoration-color .15s; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+::selection { background: var(--accent); color: var(--accent-contrast); }
+img, svg, canvas, video { max-width: 100%; }
+.container { max-width: var(--page); margin: 0 auto; padding: 0 var(--gutter); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ===== Header / footer (được main.js chèn vào) ===== */
+.skip-link {
+  position: absolute; left: var(--gutter); top: -4rem; z-index: 10; padding: .6rem 1rem;
+  background: var(--text); color: var(--bg); font: 500 .8125rem var(--mono); text-decoration: none;
+}
+.skip-link:focus { top: .75rem; }
+.site-header { border-top: 4px solid var(--rule); border-bottom: 1px solid var(--border); }
+.site-header .container { display: flex; align-items: center; gap: 2rem; min-height: 3.5rem; }
+.brand { font: 600 1.375rem/1 var(--font); letter-spacing: -0.015em; color: var(--text); text-decoration: none; }
+.site-header nav { display: flex; gap: 1.5rem; flex: 1; }
+.site-header nav a {
+  font: .8125rem/1.4 var(--mono); color: var(--muted); text-decoration: none;
+  border-bottom: 1px solid transparent; padding-block: .15rem;
+}
+.site-header nav a:hover, .site-header nav a[aria-current] { color: var(--text); border-bottom-color: currentColor; }
+.theme-toggle {
+  display: grid; place-items: center; width: 2.25rem; height: 2.25rem; margin-right: -.5rem; padding: 0;
+  background: none; border: 0; color: var(--muted); cursor: pointer; transition: color .15s;
+}
+.theme-toggle:hover { color: var(--accent); }
+.theme-toggle svg { transition: transform .35s ease; }
+.theme-toggle[data-mode="dark"] svg { transform: rotate(180deg); }
+.site-footer { border-top: 1px solid var(--border); color: var(--muted); font: .75rem/1.5 var(--mono); padding: 1.5rem 0 2rem; }
+
+/* ===== Controls ===== */
+.btn {
+  font: 500 .8125rem/1 var(--mono); padding: .7rem .75rem; cursor: pointer; border-radius: 2px;
+  border: 1px solid var(--rule); background: transparent; color: var(--text);
+  transition: background-color .15s, color .15s, border-color .15s;
+}
+.btn:hover { background: var(--text); color: var(--bg); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { min-width: 5.5rem; background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+.btn.primary:hover { background: var(--text); border-color: var(--text); color: var(--bg); }
+select {
+  font: .8125rem var(--mono); padding: .55rem .4rem; border-radius: 2px;
+  border: 1px solid var(--rule); background: var(--bg); color: var(--text);
+}
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 5rem; height: 1.25rem; margin: 0; background: transparent; vertical-align: middle; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--rule); }
+input[type="range"]::-moz-range-track { height: 2px; background: var(--rule); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: .875rem; height: .875rem; margin-top: -.4rem; border: 0; border-radius: 1px; background: var(--accent); }
+input[type="range"]::-moz-range-thumb { width: .875rem; height: .875rem; border: 0; border-radius: 1px; background: var(--accent); }
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ===== Home ===== */
+.hero { padding: clamp(2.5rem, 7vw, 5rem) 0 clamp(2.25rem, 5vw, 3.75rem); text-align: center; }
+.hero-kicker { margin: 0 0 clamp(.5rem, 1.5vw, 1rem); font: italic 1.125rem/1.4 var(--font); color: var(--muted); }
+.hero h1 { display: flex; flex-direction: column; align-items: center; font-weight: 400; text-transform: uppercase; text-wrap: nowrap; }
+.h1-light { font: 400 clamp(1.75rem, .4rem + 6.4vw, 5.5rem)/1.05 var(--font); letter-spacing: -0.02em; }
+.h1-heavy { font: 800 clamp(3rem, .5rem + 11vw, 9rem)/1.05 var(--display); letter-spacing: -0.04em; }
+.h1-heavy [aria-hidden] { color: var(--accent); }
+.hero-note { margin: clamp(1rem, 2.5vw, 1.75rem) 0 0; font: .75rem/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+/* Khối danh mục luôn tối ở cả hai theme: khai báo bộ màu tối riêng, các thành phần bên trong tự ăn theo. */
+.catalog {
+  --bg: #100e0b; --surface: #1c1915; --text: #ece6d9; --muted: #a39a8a; --faint: #7a7163; --border: #34302a; --rule: #ece6d9;
+  --accent: #ee7a55; --accent-contrast: #151310; --indigo: #8fb0ee; --green: #6fcaa8; --ochre: #e2b45f;
+  margin-bottom: clamp(3rem, 8vw, 6rem); padding: 1.25rem clamp(1rem, 3vw, 2rem) 1.25rem;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: .5rem;
+}
+.label { font: 400 .75rem/1.4 var(--mono); color: var(--muted); padding: 1rem 0 .25rem; }
+.label span { margin-left: .5em; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1.5rem; padding-bottom: .75rem; border-bottom: 1px solid var(--border); }
+.search { flex: 1 1 14rem; display: block; }
+.search input {
+  width: 100%; padding: .5rem 0; font: .9375rem/1.4 var(--mono); color: var(--text);
+  background: none; border: 0; border-radius: 0; -webkit-appearance: none; appearance: none;
+}
+.search input::placeholder { color: var(--muted); opacity: 1; }
+.views { display: flex; gap: 1.25rem; }
+
+/* Nút chọn kiểu "ô vuông + nhãn": chủ đề và kiểu hiển thị dùng chung. */
+.topic, .view {
+  display: flex; align-items: baseline; gap: .65rem; padding: .3rem 0;
+  font: .875rem/1.4 var(--mono); text-align: left; color: var(--muted);
+  background: none; border: 0; cursor: pointer; transition: color .15s;
+}
+.view { font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
+.topic::before, .view::before {
+  content: ""; flex: none; width: .5rem; height: .5rem; border: 1px solid currentColor;
+  align-self: center; transition: background-color .15s, border-color .15s;
+}
+.topic:hover, .view:hover, .topic[aria-pressed="true"], .view[aria-pressed="true"] { color: var(--text); }
+.topic[aria-pressed="true"]::before, .view[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); }
+.topic .count { color: var(--muted); font-size: .75rem; }
+
+.topics { padding: .5rem 0 1rem; border-bottom: 1px solid var(--border); }
+.topics .label { padding-top: .5rem; }
+.topic-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .1rem 1.5rem; }
+/* Nhiều chủ đề: chỉ hiện vài mục đầu (và mục đang chọn), còn lại mở bằng nút. */
+.topics:not(.is-open) .extra:not(:has([aria-pressed="true"])) { display: none; }
+.topics-more { display: none; }
+.topics.is-long .topics-more { display: block; margin-top: .5rem; }
+.topics-more, .empty button {
+  padding: .3rem 0; font: .75rem/1.4 var(--mono); color: var(--text);
+  background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: .2em;
+}
+.empty button { margin-left: .75rem; }
+
+/* Danh sách bài: mặc định là hàng dạng bảng, data-view="grid" đổi sang lưới. */
+.entry { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 10.5rem 9rem; align-items: center; column-gap: clamp(1rem, 3vw, 2.5rem); padding: 1.1rem 0; border-top: 1px solid var(--border); }
+.entry:first-child { border-top: 0; }
+.entry-body { display: grid; gap: .4rem; min-width: 0; }
+.entry-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1.25rem; margin: 0; font: .75rem/1.5 var(--mono); color: var(--muted); }
+.entry-num { color: var(--accent); }
+.entry-title { font-size: clamp(1.3rem, 1.1rem + .8vw, 1.625rem); line-height: 1.2; letter-spacing: -0.01em; }
+.entry-title a {
+  color: inherit; text-decoration: underline; text-decoration-color: transparent;
+  text-decoration-thickness: 2px; text-underline-offset: .18em; transition: text-decoration-color .2s;
+}
+.entry-title a::after { content: ""; position: absolute; inset: 0; } /* cả khối là vùng bấm */
+.entry-title a:focus-visible { outline: none; }
+.entry-title a:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
+.entry:hover .entry-title a { text-decoration-color: var(--accent); }
+.entry-summary {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  margin: 0; max-width: 34rem; color: var(--muted); font-size: .9375rem; line-height: 1.5;
+}
+.entry-cover .cover { border: 1px solid var(--border); }
+.entry-tags { display: flex; flex-direction: column; align-items: flex-end; margin: 0; font: .75rem/1.6 var(--mono); color: var(--muted); text-align: right; }
+.empty { color: var(--muted); margin: 1.25rem 0 .5rem; }
+
+#post-list[data-view="grid"] { display: grid; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr)); gap: 2rem 1.5rem; padding-top: 1.25rem; }
+#post-list[data-view="grid"] .entry { display: flex; flex-direction: column; align-items: stretch; gap: .9rem; padding: 0; border-top: 0; }
+#post-list[data-view="grid"] .entry-cover { order: -1; }
+#post-list[data-view="grid"] .entry-summary { -webkit-line-clamp: 3; line-clamp: 3; }
+#post-list[data-view="grid"] .entry-tags { flex-direction: row; flex-wrap: wrap; gap: 0 .9em; align-items: baseline; text-align: left; }
+
+/* ===== Ảnh bìa sinh từ code (assets/js/covers.js) =====
+ * Mỗi <svg class="cover"> tự đặt --c (một trong các màu của theme); nền và nét lấy từ --c.
+ */
+.cover { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: color-mix(in srgb, var(--c, var(--accent)) 16%, var(--bg)); }
+img.cover { object-fit: cover; }
+.cover .ink { fill: var(--c); }
+.cover .soft { fill: color-mix(in srgb, var(--c) 38%, var(--bg)); }
+.cover .pale { fill: var(--text); }
+.cover .line, .cover .hair { fill: none; stroke: var(--c); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.cover .hair { stroke: color-mix(in srgb, var(--c) 42%, var(--bg)); stroke-width: 1; }
+.cover .thick { stroke-width: 2.5; }
+.cover .dash { stroke-dasharray: 4 3; }
+
+/* ===== Bài viết =====
+ * .post là lưới ba cột: lề (--margin) | chữ (--measure) | phần dư.
+ * Mặc định mọi thứ nằm ở cột chữ; tiêu đề trải toàn bộ, còn mô phỏng, code và ảnh .wide
+ * mở rộng từ cột chữ sang phải để có chỗ rộng cho phần tương tác.
+ */
+.post {
+  display: grid;
+  grid-template-columns: [wide-start text-start] minmax(0, var(--measure)) [text-end] minmax(0, 1fr) [wide-end];
+  padding-top: clamp(2.5rem, 7vw, 5rem); padding-bottom: clamp(4rem, 9vw, 7rem);
+  counter-reset: section;
+}
+.post > * { grid-column: text-start / text-end; min-width: 0; }
+.post > h1, .post > .post-meta { grid-column: wide-start / wide-end; }
+.post > .sim, .post > .code, .post > figure.wide, .post > figure.diagram { grid-column: text-start / wide-end; }
+
+.post h1 {
+  max-width: 18em; margin-bottom: clamp(1.5rem, 3vw, 2.25rem);
+  font-size: clamp(2.25rem, 1rem + 5vw, 4.5rem); line-height: 1.1; letter-spacing: -0.025em;
+}
+.post > .post-meta {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1.25rem; margin: 0 0 clamp(2.25rem, 5vw, 3.5rem);
+  padding-top: .85rem; border-top: 1px solid var(--rule); font: .8125rem/1.5 var(--mono); color: var(--muted);
+}
+.post-meta time { color: var(--text); }
+.post-meta + p { font-size: 1.3em; line-height: 1.45; text-wrap: pretty; }
+
+.post h2 {
+  position: relative; counter-increment: section; margin: 1.9em 0 .6em;
+  font-size: clamp(1.625rem, 1.3rem + 1.2vw, 2.125rem); line-height: 1.15; letter-spacing: -0.015em;
+}
+.post h3 { margin: 2em 0 .4em; font-size: 1.25rem; line-height: 1.3; font-weight: 600; }
+.post p, .post ul, .post ol { margin: 0 0 1.15em; text-wrap: pretty; }
+.post li { margin: .3em 0; }
+.post li::marker { color: var(--accent); }
+.post :not(pre) > code { font: .8em var(--mono); background: var(--surface); padding: .12em .38em; border-radius: 3px; }
+.post a { text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); }
+.post a:hover { text-decoration-color: currentColor; }
+
+.post figure { margin: 2em 0; }
+.post figure img { display: block; max-width: 100%; height: auto; }
+.post figcaption { margin-top: .75rem; font: .8125rem/1.5 var(--mono); color: var(--muted); }
+.post blockquote { position: relative; margin: 1.75em 0; padding: 0; font-size: 1.3em; line-height: 1.4; font-style: italic; }
+.post blockquote::before { content: "\201C"; position: absolute; left: -.55em; color: var(--accent); }
+.post blockquote > :last-child { margin-bottom: 0; }
+.post table { width: 100%; margin: 1.75em 0; border-collapse: collapse; font-size: .9375em; font-variant-numeric: lining-nums tabular-nums; }
+.post th, .post td { padding: .7rem 1rem .7rem 0; text-align: left; border-bottom: 1px solid var(--border); }
+.post thead th { border-top: 2px solid var(--rule); border-bottom: 1px solid var(--rule); font: 500 .75rem/1.4 var(--mono); color: var(--muted); }
+.note { margin: 1.75em 0; padding: 1rem 1.25rem; background: var(--surface); border-top: 2px solid var(--rule); font-size: .9375em; line-height: 1.55; }
+.note > :last-child { margin-bottom: 0; }
+
+@media (min-width: 64rem) {
+  .post { grid-template-columns: [wide-start] var(--margin) [text-start] minmax(0, var(--measure)) [text-end] minmax(0, 1fr) [wide-end]; }
+  .post-meta time { flex: 0 0 calc(var(--margin) - 1.25rem); }
+  .post h2::before {
+    content: counter(section, decimal-leading-zero); position: absolute; left: calc(-1 * var(--margin)); top: .6em;
+    font: 400 .75rem/1 var(--mono); letter-spacing: 0; color: var(--muted);
+  }
+}
+@media (max-width: 40rem) {
+  .post table { display: block; overflow-x: auto; }
+}
+
+/* ===== Khối code (main.js bọc <pre><code>) ===== */
+.code { margin: 2em 0; background: var(--surface); border-top: 2px solid var(--rule); border-bottom: 1px solid var(--border); }
+.code-bar {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+  padding: .6rem 1.1rem; border-bottom: 1px solid var(--border); font: .75rem/1.4 var(--mono); color: var(--muted);
+}
+.code-bar a { color: var(--muted); }
+.code-bar a:hover { color: var(--accent); }
+.code pre { margin: 0; padding: 1rem 1.1rem 1.15rem; overflow: auto; max-height: 32rem; font: .8125rem/1.65 var(--mono); tab-size: 2; }
+.code pre code { background: none; border: 0; padding: 0; font: inherit; color: var(--text); }
+.code pre code.hljs { padding: 0; background: transparent; }
+.hljs-keyword, .hljs-doctag, .hljs-selector-tag { color: var(--accent); }
+.hljs-title, .hljs-built_in, .hljs-type, .hljs-section { color: var(--indigo); }
+.hljs-string, .hljs-regexp, .hljs-symbol, .hljs-template-string { color: var(--green); }
+.hljs-number, .hljs-literal, .hljs-meta { color: var(--ochre); }
+.hljs-comment, .hljs-quote { color: var(--muted); }
+
+/* ===== Danh sách file code đính kèm ===== */
+.code-links { list-style: none; padding: 0; margin: 1.25em 0 0; border-top: 1px solid var(--rule); }
+.code-links li { margin: 0; border-bottom: 1px solid var(--border); }
+.code-links a {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .85rem 0;
+  font: .875rem/1.4 var(--mono); color: var(--text); text-decoration: none;
+}
+.code-links a:hover { color: var(--accent); }
+.code-links small { font: italic 1rem/1.4 var(--font); color: var(--muted); text-align: right; }
+
+/* ===== Simulation (khung dùng chung cho mọi bài) =====
+ * Một "tấm hình" có thanh tiêu đề lấy từ aria-label, cùng ngôn ngữ với .code.
+ */
+.sim { margin: 2em 0; padding: 0 1.25rem 1.25rem; background: var(--surface); border-top: 2px solid var(--rule); border-bottom: 1px solid var(--border); }
+.sim::before {
+  content: attr(aria-label); content: attr(aria-label) / "";
+  display: block; margin: 0 -1.25rem; padding: .6rem 1.25rem; border-bottom: 1px solid var(--border);
+  font: .75rem/1.4 var(--mono); color: var(--muted);
+}
+.sim-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; padding: 1.1rem 0; }
+.sim-controls label { display: flex; align-items: center; gap: .5rem; font: .8125rem/1.4 var(--mono); color: var(--muted); }
+.sim-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.sim-stage { width: 100%; }
+.sim canvas { display: block; width: 100%; height: 15rem; }
+.sim-stats { display: flex; flex-wrap: wrap; gap: .4rem 1.75rem; margin-top: 1rem; font: .8125rem/1.4 var(--mono); color: var(--muted); }
+.sim-stats b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* ===== Sơ đồ (figure.diagram) =====
+ * SVG viết tay trong bài, cùng ngôn ngữ với .code và .sim. Chữ trong SVG tính theo viewBox,
+ * nên để viewBox rộng ~680 thì chữ 13 hiện ra khoảng 13px; màn hình hẹp thì figure cuộn ngang.
+ * Lớp dùng trong SVG: .box (khung), .box.solid (khung đặc), .box.key (nhấn), .line (nét), .dash (nét đứt),
+ * .life (đường sống của sơ đồ tuần tự), .muted (chữ phụ), .inv (chữ trên nền đặc), <marker class="head"> (mũi tên).
+ */
+.diagram { margin: 2em 0; background: var(--surface); border-top: 2px solid var(--rule); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.post .diagram figcaption { margin: 0; padding: .6rem 1.1rem; border-bottom: 1px solid var(--border); }
+.diagram svg { display: block; width: clamp(32rem, calc(100% - 2.2rem), 42rem); max-width: none; height: auto; margin: 1.25rem 1.1rem 1.5rem; }
+.diagram text { font: 13px/1 var(--mono); fill: var(--text); }
+.diagram .sm { font-size: 12px; }
+.diagram .muted { fill: var(--muted); }
+.diagram .inv { fill: var(--bg); }
+.diagram .box { fill: var(--bg); stroke: var(--rule); stroke-width: 1.25; }
+.diagram .box.solid { fill: var(--text); }
+.diagram .box.key { stroke: var(--accent); stroke-width: 2; }
+.diagram .line, .diagram .life { fill: none; stroke: var(--rule); stroke-width: 1.25; }
+.diagram .life { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 4; }
+.diagram .line.dash { stroke-dasharray: 6 4; }
+.diagram .line.key { stroke: var(--accent); stroke-width: 2; }
+.diagram .head path { fill: var(--rule); }
+.diagram .head.key path { fill: var(--accent); }
+.diagram .tag { font-size: 11px; fill: var(--muted); letter-spacing: .04em; }
+
+/* ===== Responsive ===== */
+@media (max-width: 56rem) {
+  /* Hàng bài: chữ bên trái, ảnh bìa nhỏ bên phải, chủ đề xuống dòng dưới. */
+  .entry { grid-template-columns: minmax(0, 1fr) 8rem; grid-template-areas: "body cover" "tags tags"; row-gap: .6rem; }
+  .entry-body { grid-area: body; }
+  .entry-cover { grid-area: cover; }
+  .entry-tags { grid-area: tags; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0 .9em; text-align: left; }
+}
+@media (max-width: 36rem) { /* dưới mức này sơ đồ (rộng tối thiểu 32rem) không còn vừa khung */
+  .diagram figcaption::after { content: " · vuốt ngang để xem hết" / ""; }
+}
+@media (max-width: 40rem) {
+  .entry { grid-template-columns: minmax(0, 1fr) 6rem; }
+  .toolbar { gap: .25rem 1.5rem; }
+  .sim { padding: 0 1rem 1rem; }
+  .sim::before { margin: 0 -1rem; padding-inline: 1rem; }
+  .sim-controls { gap: .75rem 1rem; }
+  .sim-controls label { flex: 1 1 100%; justify-content: space-between; }
+  .sim-controls input[type="range"], .sim-controls select { width: 55%; }
+  .post blockquote::before { position: static; }
+  .site-header .container { gap: 1.25rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}

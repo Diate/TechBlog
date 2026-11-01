@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}} · Tech Blog</title>
+  <meta name="description" content="">
+  <!-- Đường dẫn luôn tương đối. Bài nằm ở posts/<slug>/ nên cần ../../ để lên gốc site. -->
+  <link rel="stylesheet" href="../../assets/css/main.css">
+  <script src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <!--
+    Khung bài (chi tiết: templates/GUIDE.md, xem từng thành phần: templates/components/):
+    mở đầu, mô phỏng, ý tưởng, cách làm, so sánh, file code. Bỏ phần không dùng, đừng đảo thứ tự.
+    Cần thêm sơ đồ khối, sơ đồ tuần tự, bảng, ghi chú hay ảnh rộng thì chép HTML từ templates/components/.
+  -->
+  <main>
+    <article class="container post">
+      <h1>{{TITLE}}</h1>
+      <p class="post-meta">
+        <time datetime="{{DATE}}">{{DATE}}</time>
+        <span>#tag</span>
+      </p>
+
+      <!-- 1. Đoạn mở đầu (tự to hơn): 1 đến 2 câu, bài này cho người đọc điều gì. -->
+      <p>Đoạn mở đầu: bài này giải thích điều gì và vì sao nó đáng quan tâm.</p>
+
+      <!-- 2. Mô phỏng đứng ngay sau đoạn mở đầu. aria-label thành tiêu đề của khung, hãy đặt cho có nghĩa. -->
+      <section class="sim" aria-label="Mô phỏng">
+        <div class="sim-controls">
+          <button class="btn primary" id="toggle" type="button">Chạy</button>
+        </div>
+        <canvas id="stage"></canvas>
+      </section>
+
+      <!-- 3. Ý tưởng cốt lõi. Nhiều phần nối với nhau thì thêm sơ đồ khối ở đây. -->
+      <h2>Ý tưởng</h2>
+      <p>Giải thích ý chính bằng ngôn ngữ thường, mỗi mục một ý.</p>
+      <div class="note">
+        <p>Ghi chú: lưu ý hoặc ngoại lệ nằm ngoài mạch chính. Không quá hai cái mỗi bài.</p>
+      </div>
+
+      <!-- 4. Cách làm. Nhiều bên trao đổi theo thứ tự thì thêm sơ đồ tuần tự ở đây. -->
+      <h2>Cách làm</h2>
+      <p>Code tự nạp từ file trong <code>code/</code>, kèm nút tải về, nên chỉ có một bản code duy nhất để sửa:</p>
+      <pre><code data-src="code/example.js"></code></pre>
+
+      <p>Vài dòng ngắn thì viết thẳng trong HTML (nhớ escape <code>&lt;</code> thành <code>&amp;lt;</code>):</p>
+      <pre><code class="language-js" data-filename="inline.js">console.log("hello");</code></pre>
+
+      <!-- Tuỳ chọn: ảnh. Bỏ file vào images/ rồi nhúng; luôn có alt. Thêm class="wide" vào <figure> để ảnh rộng hơn. -->
+      <figure>
+        <img src="images/placeholder.svg" alt="Mô tả ảnh cho người dùng đọc màn hình" width="640" height="320" loading="lazy">
+        <figcaption>Chú thích ảnh.</figcaption>
+      </figure>
+
+      <!-- 5. Tuỳ chọn: bảng so sánh số liệu (mẫu trong templates/components/). -->
+
+      <!-- 6. File code của bài -->
+      <h2>File code của bài</h2>
+      <ul class="code-links">
+        <li><a href="code/example.js" download>code/example.js <small>mô tả ngắn</small></a></li>
+        <li><a href="sim.js" download>sim.js <small>trình mô phỏng</small></a></li>
+      </ul>
+    </article>
+  </main>
+
+  <script src="sim.js"></script>
+</body>
+</html>

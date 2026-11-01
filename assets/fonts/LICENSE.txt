@@ -1,0 +1,17 @@
+Fonts tự host, lấy từ Google Fonts. Cả ba theo SIL Open Font License 1.1
+(https://openfontlicense.org), được phép dùng, nhúng và phân phối kèm website.
+
+Newsreader      © The Newsreader Project Authors (Production Type)
+                https://github.com/productiontype/Newsreader
+                Bản variable có trục opsz (6-72) và wght; đã giới hạn wght 400-600 (roman), 400 (italic);
+                chỉ giữ hai subset "latin" và "vietnamese".
+
+IBM Plex Mono   © IBM Corp.
+                https://github.com/IBM/plex
+                Weight 400 và 500; chỉ giữ hai subset "latin" và "vietnamese".
+
+Archivo         © The Archivo Project Authors (Omnibus-Type)
+                https://github.com/Omnibus-Type/Archivo
+                Weight 800; chỉ giữ hai subset "latin" và "vietnamese". Chỉ dùng cho dòng chữ đậm cỡ lớn ở đầu trang chủ.
+
+Ký tự ngoài các subset trên (vd. chữ Hy Lạp, Cyrillic) sẽ rơi về font dự phòng trong biến --font / --mono.

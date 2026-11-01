@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tech Blog</title>
+  <meta name="description" content="Blog kỹ thuật với các mô phỏng tương tác về thuật toán, kỹ thuật mới và công nghệ.">
+  <link rel="stylesheet" href="assets/css/main.css">
+  <script src="assets/js/main.js"></script>
+</head>
+<body>
+  <main>
+    <div class="container">
+      <section class="hero">
+        <p class="hero-kicker">Thuật toán, kỹ thuật và công nghệ</p>
+        <h1>
+          <span class="h1-light">Giải thích bằng</span>
+          <span class="h1-heavy"><span aria-hidden="true">(</span>mô phỏng<span aria-hidden="true">)</span></span>
+        </h1>
+        <p class="hero-note">Bạn có thể tự tay chạy</p>
+      </section>
+
+      <section class="catalog" aria-labelledby="stream-label">
+        <div class="toolbar">
+          <label class="search">
+            <span class="visually-hidden">Tìm bài viết</span>
+            <input id="q" type="search" placeholder="Tìm bài viết..." autocomplete="off" spellcheck="false">
+          </label>
+          <div class="views" role="group" aria-label="Kiểu hiển thị">
+            <button class="view" type="button" data-view="list" aria-pressed="true">Danh sách</button>
+            <button class="view" type="button" data-view="grid" aria-pressed="false">Lưới</button>
+          </div>
+        </div>
+        <div class="topics" role="group" aria-labelledby="topics-label">
+          <p class="label" id="topics-label">Chủ đề</p>
+          <ul class="topic-list" id="filters"></ul>
+        </div>
+        <h2 class="label" id="stream-label">Bài viết<span id="count"></span></h2>
+        <div id="post-list" data-view="list"></div>
+        <p class="visually-hidden" id="status" role="status"></p>
+        <noscript><p class="empty">Cần bật JavaScript để xem danh sách bài viết.</p></noscript>
+      </section>
+    </div>
+  </main>
+  <script src="assets/js/posts.js"></script>
+  <script src="assets/js/covers.js"></script>
+  <script src="assets/js/home.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "blog",
+  "private": true,
+  "type": "module",
+  "description": "Blog kỹ thuật tĩnh (HTML + CSS + JS), deploy lên GitHub Pages",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "new": "node scripts/new-post.mjs"
+  }
+}

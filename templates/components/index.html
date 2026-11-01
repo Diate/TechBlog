@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Thư viện thành phần · Tech Blog</title>
+  <!-- Trang tra cứu khi viết bài, không nằm trong danh sách bài và không được deploy. Mở bằng: npm run dev -->
+  <link rel="stylesheet" href="../../assets/css/main.css">
+  <script src="../../assets/js/main.js"></script>
+  <style>
+    .post > .cover-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 1.25rem 1rem; grid-column: text-start / wide-end; }
+    .cover-grid figure { margin: 0; }
+    .cover-grid figcaption { margin-top: .4rem; }
+    .chip { display: inline-block; width: 2.75rem; height: 1.1rem; vertical-align: middle; border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="container post">
+      <h1>Thư viện thành phần</h1>
+      <p class="post-meta">
+        <span>templates/components</span>
+        <span>chỉ để tra cứu, không đăng lên site</span>
+      </p>
+
+      <p>Mỗi mục có bản chạy thật và HTML để chép ngay bên dưới. HTML đó tự sinh từ chính bản chạy, nên luôn khớp với CSS hiện tại. Quy trình và quy ước thiết kế nằm ở <code>templates/GUIDE.md</code>.</p>
+
+      <p>Khung mô phỏng <code>.sim</code> không có ở đây vì nó cần JS để chạy. Bản chạy thật nằm sẵn trong bài mới: <code>npm run new -- ten-bai "Tiêu đề"</code>.</p>
+
+      <h2>Chữ trong bài</h2>
+      <p>Đoạn đầu tiên sau <code>.post-meta</code> tự thành đoạn mở đầu (chữ to hơn). Mỗi <code>&lt;h2&gt;</code> tự được đánh số ở lề trái, không cần viết số tay. Dùng <code>&lt;code&gt;</code> cho tên hàm, biến, file; thuật ngữ tiếng Anh giữ nguyên.</p>
+      <div data-demo="inner">
+        <p>Một đoạn văn có <b>chữ đậm</b>, <em>chữ nghiêng</em>, <code>tenHam()</code> và <a href="#">một liên kết</a>.</p>
+        <ul>
+          <li>Mỗi mục là một ý ngắn.</li>
+          <li>Dấu đầu dòng tự có màu nhấn.</li>
+        </ul>
+        <blockquote><p>Trích dẫn: dùng cho một câu đáng nhớ, không dùng để trang trí.</p></blockquote>
+      </div>
+
+      <h2>Ghi chú</h2>
+      <p>Dùng khi có một lưu ý, ngoại lệ hoặc mẹo nằm ngoài mạch chính. Mỗi bài không nên quá hai ghi chú.</p>
+      <div class="note" data-demo>
+        <p>Nội dung ghi chú, một đến hai câu.</p>
+      </div>
+
+      <h2>Bảng</h2>
+      <p>Dùng để so sánh số liệu giữa các lựa chọn. Cột đầu là tên đối tượng. Trên màn hình hẹp bảng tự cuộn ngang.</p>
+      <table data-demo>
+        <thead><tr><th>Đối tượng</th><th>Chỉ số 1</th><th>Chỉ số 2</th></tr></thead>
+        <tbody>
+          <tr><td>Lựa chọn A</td><td>O(n)</td><td>Có</td></tr>
+          <tr><td>Lựa chọn B</td><td>O(log n)</td><td>Không</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Ảnh</h2>
+      <p>Ảnh thường nằm trong cột chữ; thêm <code>class="wide"</code> để mở rộng sang phải như khung mô phỏng. Luôn có <code>alt</code> mô tả nội dung ảnh, và chép file ảnh vào <code>images/</code> của bài (ở đây dùng ảnh mẫu nên đường dẫn là <code>../post/images/</code>, hãy đổi thành <code>images/ten.png</code>).</p>
+      <figure data-demo>
+        <img src="../post/images/placeholder.svg" alt="Mô tả ảnh cho người dùng đọc màn hình" width="640" height="320" loading="lazy">
+        <figcaption>Chú thích ảnh.</figcaption>
+      </figure>
+      <figure class="wide" data-demo>
+        <img src="../post/images/placeholder.svg" alt="Mô tả ảnh cho người dùng đọc màn hình" width="640" height="320" loading="lazy">
+        <figcaption>Ảnh rộng, dùng khi chi tiết trong ảnh cần chỗ.</figcaption>
+      </figure>
+
+      <h2>Khối code</h2>
+      <p>Có hai cách. Cách thứ nhất nạp từ file trong <code>code/</code>, tự hiện tên file kèm nút tải, và chỉ có một bản code để sửa (nên ưu tiên). Ở đây nạp file mẫu nên đường dẫn là <code>../post/code/</code>, hãy đổi thành <code>code/ten-file.js</code>.</p>
+      <pre data-demo><code data-src="../post/code/example.js"></code></pre>
+      <p>Cách thứ hai viết thẳng trong HTML, dành cho vài dòng ngắn. Nhớ escape <code>&lt;</code> thành <code>&amp;lt;</code>.</p>
+      <pre data-demo><code class="language-js" data-filename="ten-file.js">const tong = (a, b) => a + b;</code></pre>
+
+      <h2>Sơ đồ khối</h2>
+      <p>Dùng để cho thấy các phần của hệ thống và dữ liệu đi giữa chúng. Mỗi khối có thanh tiêu đề đặc (cao 26) và các dòng phụ cách nhau 18. Khối quan trọng nhất thêm <code>key</code> để viền đỏ son; nét đứt kèm <code>key</code> dành cho luồng trả về. Mỗi sơ đồ cần <code>&lt;title&gt;</code> và <code>&lt;desc&gt;</code> (nội dung đầy đủ bằng lời), và <code>id</code> marker không được trùng giữa các sơ đồ trong cùng trang.</p>
+      <figure class="diagram" data-demo>
+        <figcaption>Tiêu đề sơ đồ khối</figcaption>
+        <svg viewBox="0 0 680 140" role="img" aria-labelledby="blk-t blk-d">
+          <title id="blk-t">Sơ đồ khối: A gửi dữ liệu cho B, B gửi kết quả cho C và nhận lại phản hồi</title>
+          <desc id="blk-d">Mô tả bằng lời đủ để người dùng trình đọc màn hình hiểu sơ đồ mà không cần nhìn hình.</desc>
+          <defs>
+            <marker id="blk-head" class="head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+            <marker id="blk-head-key" class="head key" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+          </defs>
+
+          <!-- Khối: khung, thanh tiêu đề đặc, chữ tiêu đề (.inv), các dòng phụ (.sm .muted) -->
+          <rect class="box" x="8" y="16" width="148" height="100"/>
+          <rect class="box solid" x="8" y="16" width="148" height="26"/>
+          <text class="inv" x="18" y="34">Khối A</text>
+          <text class="sm muted" x="18" y="62">chi tiết 1</text>
+          <text class="sm muted" x="18" y="80">chi tiết 2</text>
+
+          <!-- Khối quan trọng nhất: thêm class "key" -->
+          <rect class="box key" x="266" y="16" width="148" height="100"/>
+          <rect class="box solid" x="266" y="16" width="148" height="26"/>
+          <text class="inv" x="276" y="34">Khối B</text>
+          <text class="sm muted" x="276" y="62">chi tiết 1</text>
+          <text class="sm muted" x="276" y="80">chi tiết 2</text>
+
+          <rect class="box" x="524" y="16" width="148" height="100"/>
+          <rect class="box solid" x="524" y="16" width="148" height="26"/>
+          <text class="inv" x="534" y="34">Khối C</text>
+          <text class="sm muted" x="534" y="62">chi tiết 1</text>
+          <text class="sm muted" x="534" y="80">chi tiết 2</text>
+
+          <!-- Mũi tên: nét liền cho luồng đi, nét đứt + key cho luồng trả về; nhãn đặt phía trên nét -->
+          <path class="line" d="M156 66H266" marker-end="url(#blk-head)"/>
+          <text x="211" y="56" text-anchor="middle">luồng 1</text>
+          <path class="line" d="M414 66H524" marker-end="url(#blk-head)"/>
+          <text x="469" y="56" text-anchor="middle">luồng 2</text>
+          <path class="line dash key" d="M524 94H414" marker-end="url(#blk-head-key)"/>
+          <text x="469" y="110" text-anchor="middle">trả về</text>
+        </svg>
+      </figure>
+
+      <h2>Sơ đồ tuần tự</h2>
+      <p>Dùng khi có nhiều bên trao đổi với nhau theo thứ tự thời gian (người dùng, giao diện, bộ xử lý...). Mỗi bên là một đường sống (<code>.life</code>) với hộp tên ở trên; mỗi thông điệp là một mũi tên nằm ngang, cách nhau khoảng 32. Thông điệp trả về dùng nét đứt. Mỗi mũi tên cần nhãn ngắn, dạng tên hàm hoặc cụm từ.</p>
+      <figure class="diagram" data-demo>
+        <figcaption>Tiêu đề sơ đồ tuần tự</figcaption>
+        <svg viewBox="0 0 680 216" role="img" aria-labelledby="seq-t seq-d">
+          <title id="seq-t">Sơ đồ tuần tự: A gửi yêu cầu cho B, B gọi C và nhận kết quả, rồi phản hồi A</title>
+          <desc id="seq-d">Mô tả bằng lời đủ để người dùng trình đọc màn hình hiểu thứ tự các bước.</desc>
+          <defs>
+            <marker id="seq-head" class="head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+            <marker id="seq-head-key" class="head key" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+          </defs>
+
+          <!-- Đường sống vẽ trước, hộp tên vẽ sau để che đầu đường -->
+          <path class="life" d="M90 40V212M340 40V212M590 40V212"/>
+          <rect class="box solid" x="38" y="12" width="104" height="28"/>
+          <text class="inv" x="90" y="31" text-anchor="middle">Bên A</text>
+          <rect class="box solid" x="288" y="12" width="104" height="28"/>
+          <text class="inv" x="340" y="31" text-anchor="middle">Bên B</text>
+          <rect class="box solid" x="538" y="12" width="104" height="28"/>
+          <text class="inv" x="590" y="31" text-anchor="middle">Bên C</text>
+
+          <!-- Thông điệp: nhãn đặt cách nét 8 phía trên. Khung lặp (tuỳ chọn):
+               <rect class="line dash" .../> kèm <text class="tag"> phía trên khung -->
+          <path class="line" d="M90 72H340" marker-end="url(#seq-head)"/>
+          <text x="215" y="64" text-anchor="middle">yêu cầu</text>
+          <path class="line" d="M340 108H590" marker-end="url(#seq-head)"/>
+          <text x="465" y="100" text-anchor="middle">gọi()</text>
+          <path class="line dash key" d="M590 144H340" marker-end="url(#seq-head-key)"/>
+          <text x="465" y="136" text-anchor="middle">kết quả</text>
+          <path class="line dash" d="M340 180H90" marker-end="url(#seq-head)"/>
+          <text x="215" y="172" text-anchor="middle">phản hồi</text>
+        </svg>
+      </figure>
+
+      <h2>Ảnh bìa</h2>
+      <p>Ảnh bìa ở trang chủ tự sinh theo tag đầu tiên của bài. Đây là tám mẫu có sẵn; chọn mẫu khác bằng <code>cover</code> trong <code>assets/js/posts.js</code>, hoặc tự vẽ một file SVG (hay ảnh) tỉ lệ 16:9 đặt trong thư mục bài rồi ghi tên file vào <code>cover</code>. Bảng tag → mẫu nằm ở đầu <code>assets/js/covers.js</code>.</p>
+      <div class="cover-grid" id="cover-grid"></div>
+      <pre><code class="language-js" data-filename="assets/js/posts.js">{
+  slug: "ten-bai",
+  title: "Tiêu đề bài",
+  date: "2026-11-01",
+  tags: ["thuật toán", "simulation"],  // tag đầu tiên quyết định mẫu bìa
+  summary: "Một đến hai câu, hiện ở danh sách (cắt sau hai dòng).",
+  cover: "bars",                       // tuỳ chọn: tên mẫu, hoặc "cover.svg"
+},</code></pre>
+
+      <h2>Màu</h2>
+      <p>Không thêm màu mới và không viết mã màu trong bài: luôn dùng biến, để sáng và tối đều đúng. Trong mô phỏng, giữ nghĩa cố định để mọi bài đọc giống nhau: chưa xử lý là <code>--faint</code>, đang xét là <code>--indigo</code>, vừa thay đổi là <code>--accent</code>, xong là <code>--green</code>.</p>
+      <table>
+        <thead><tr><th>Biến</th><th>Màu</th><th>Dùng cho</th></tr></thead>
+        <tbody>
+          <tr><td><code>--text</code></td><td><span class="chip" style="background: var(--text)"></span></td><td>Chữ chính, nét đậm</td></tr>
+          <tr><td><code>--muted</code></td><td><span class="chip" style="background: var(--muted)"></span></td><td>Chữ phụ (đủ tương phản để đọc)</td></tr>
+          <tr><td><code>--faint</code></td><td><span class="chip" style="background: var(--faint)"></span></td><td>Chỉ đồ hoạ, không bao giờ dùng cho chữ</td></tr>
+          <tr><td><code>--surface</code></td><td><span class="chip" style="background: var(--surface)"></span></td><td>Nền khung mô phỏng, khối code, sơ đồ</td></tr>
+          <tr><td><code>--border</code></td><td><span class="chip" style="background: var(--border)"></span></td><td>Đường kẻ mảnh</td></tr>
+          <tr><td><code>--accent</code></td><td><span class="chip" style="background: var(--accent)"></span></td><td>Nhấn duy nhất: liên kết, số mục, "vừa thay đổi"</td></tr>
+          <tr><td><code>--indigo</code></td><td><span class="chip" style="background: var(--indigo)"></span></td><td>Chỉ trong mô phỏng, sơ đồ, code: đang xét</td></tr>
+          <tr><td><code>--green</code></td><td><span class="chip" style="background: var(--green)"></span></td><td>Chỉ trong mô phỏng, sơ đồ, code: xong, đúng</td></tr>
+          <tr><td><code>--ochre</code></td><td><span class="chip" style="background: var(--ochre)"></span></td><td>Chỉ trong mô phỏng, sơ đồ, code: số, hằng, cảnh báo nhẹ</td></tr>
+        </tbody>
+      </table>
+    </article>
+  </main>
+
+  <script src="../../assets/js/covers.js"></script>
+  <script>
+    // Với mỗi [data-demo], chép HTML của chính nó thành một khối code ngay bên dưới.
+    // data-demo="inner" chép phần ruột của <div> (bỏ thẻ bọc), còn lại chép cả phần tử.
+    function dedent(text, skipFirst) {
+      const lines = text.replace(/\t/g, '  ').split('\n');
+      const indents = (skipFirst ? lines.slice(1) : lines).filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length);
+      const cut = indents.length ? Math.min(...indents) : 0;
+      return lines.map((l, i) => (skipFirst && i === 0 ? l : l.slice(cut))).join('\n').trim();
+    }
+    document.querySelectorAll('[data-demo]').forEach((el) => {
+      const inner = el.dataset.demo === 'inner';
+      const clone = el.cloneNode(true);
+      clone.removeAttribute('data-demo');
+      const code = document.createElement('code');
+      code.className = 'language-html';
+      code.dataset.filename = 'HTML để chép';
+      code.textContent = dedent(inner ? clone.innerHTML : clone.outerHTML, !inner);
+      const pre = document.createElement('pre');
+      pre.append(code);
+      el.after(pre);
+    });
+
+    const grid = document.getElementById('cover-grid');
+    for (const name of COVERS.motifs) {
+      const figure = document.createElement('figure');
+      const caption = document.createElement('figcaption');
+      caption.innerHTML = `<code>${name}</code>`;
+      figure.append(COVERS.render({ slug: 'mau-' + name, cover: name }), caption);
+      grid.append(figure);
+    }
+  </script>
+</body>
+</html>
