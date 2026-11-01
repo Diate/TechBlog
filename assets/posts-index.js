@@ -10,6 +10,6 @@ window.POSTS = [
       "embedded",
       "simulation"
     ],
-    "summary": "Đi qua từng khối của một pipeline DSP cho dữ liệu cảm biến: lấy mẫu, FIR, cửa sổ trượt, detrend, RMS và kurtosis, FFT, band energy. Có mô phỏng để tự chỉnh từng tham số."
+    "summary": "Đi qua từng khối của một pipeline DSP cho dữ liệu cảm biến: lấy mẫu, Q-format, FIR, cửa sổ trượt, detrend, RMS và kurtosis, FFT, band energy. Mỗi phần có mô phỏng riêng để tự chỉnh tham số và một ví dụ tính tay để kiểm lại."
   }
 ];

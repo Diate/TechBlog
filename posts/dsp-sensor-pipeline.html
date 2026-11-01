@@ -4,13 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pipeline DSP cho dữ liệu cảm biến · Tech Blog</title>
-  <meta name="description" content="Đi qua từng khối của một pipeline DSP cho dữ liệu cảm biến: lấy mẫu, FIR, cửa sổ trượt, detrend, RMS và kurtosis, FFT, band energy. Có mô phỏng để tự chỉnh từng tham số.">
+  <meta name="description" content="Đi qua từng khối của một pipeline DSP cho dữ liệu cảm biến: lấy mẫu, Q-format, FIR, cửa sổ trượt, detrend, RMS và kurtosis, FFT, band energy. Mỗi phần có mô phỏng riêng để tự chỉnh tham số và một ví dụ tính tay để kiểm lại.">
   <link rel="stylesheet" href="../assets/css/main.css">
   <script src="../assets/js/main.js"></script>
   <style>
     /* CSS riêng của bài này */
     .post figure.wide > table { margin: 0; }
     .post .eq { margin: 0 0 1.4em; padding: .55rem 0 .55rem 1rem; border-left: 2px solid var(--accent); font: .9375rem/1.7 var(--mono); overflow-x: auto; }
+
+    /* Ví dụ tính tay: cùng vạch đỏ bên trái với .eq, để phân biệt với phần giải thích */
+    .post .calc { margin: 1.75em 0; padding: .1rem 0 .1rem 1rem; border-left: 2px solid var(--accent); }
+    .post .calc > :last-child { margin-bottom: 0; }
+    .post .calc .calc-title { margin: 0 0 .75rem; font: .75rem/1.5 var(--mono); color: var(--muted); }
+    .post .calc table { margin: .9em 0; }
+    .post .calc table.dense th, .post .calc table.dense td { padding: .45rem .5rem .45rem 0; }
+    .post > .calc.wide { grid-column: text-start / wide-end; }   /* khung có bảng rộng: chữ giữ độ rộng đọc, bảng được ra hết cỡ */
+    .post .calc.wide > :not(table) { max-width: var(--measure); }
+    .post .try { font-size: .9375em; color: var(--muted); }
+    .post .try b { color: var(--text); font-weight: 600; }
+
+    /* Mô phỏng nhỏ ở từng phần */
+    .sim .h-sm { height: 7rem; }
+    .sim .h-md { height: 9.5rem; }
+    .sim .h-lg { height: 13rem; }
+    .sim table { margin: 0 0 1rem; }
+    .sim .sim-actions { margin-top: .75rem; }
 
     .sim-controls { flex-direction: column; align-items: stretch; gap: 0; }
     .ctl-group { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 0; border-top: 1px solid var(--border); }
@@ -126,14 +144,16 @@
 
       <p>Ba khung vẽ ba điểm của pipeline. Trên cùng là tín hiệu theo thời gian: xám là mẫu thô, xanh là sau FIR, thanh đặc phía trên là khung đang phân tích và thanh nét đứt là khung trước đó. Ở giữa là khung đưa vào FFT, dưới cùng là phổ công suất chia thành bốn dải. Vài thí nghiệm nên thử, mỗi cái ứng với một phần bên dưới:</p>
       <ol>
-        <li>Đổi hàm cửa sổ từ Hann sang Chữ nhật, bật trục dB, và nhìn "chân" của đỉnh phổ nở ra: đó là rò rỉ phổ (<a href="#tan-so">miền tần số</a>).</li>
+        <li>Đổi hàm cửa sổ từ Hann sang Chữ nhật, bật trục dB, và nhìn "chân" của đỉnh phổ nở ra: đó là rò rỉ phổ (<a href="#ro-ri">rò rỉ phổ</a>).</li>
         <li>Tắt Detrend khi đang dùng Hann: RMS nhảy từ khoảng 0.7 lên khoảng 3, còn f trội tụt về dưới 1 Hz (<a href="#khu-dc">detrend</a>).</li>
         <li>Kéo Tone 2 lên 70 Hz: đường xám trong phổ cho thấy đỉnh nằm ở 30 Hz, không phải 70 Hz (<a href="#lay-mau">lấy mẫu</a>).</li>
         <li>Bật Va đập rồi bấm Bước vài lần: ở khung chứa trọn một cú va đập, RMS chỉ nhích lên chừng 20% nhưng kurtosis nhảy từ 1.5 lên 4 đến 7; khung chỉ thấy đuôi cú va đập thì kurtosis thấp hơn hẳn (<a href="#thoi-gian">đặc trưng miền thời gian</a>, <a href="#cua-so">cửa sổ trượt</a>).</li>
         <li>Kéo số tap xuống 6 rồi lên 32 và nhìn đường nét đứt đổi độ dốc cùng độ trễ của đường xanh (<a href="#bo-loc-fir">bộ lọc FIR</a>).</li>
       </ol>
+      <p>Mô phỏng này chạy cả chuỗi cùng lúc, nên khó thấy mỗi khối làm gì khi đứng riêng. Vì vậy mỗi phần dưới đây theo cùng một nhịp: ý tưởng bằng lời, một <b>mô phỏng riêng</b> chỉ cho khối đó, và một <b>ví dụ tính tay</b> với số nhỏ để bạn kiểm lại bằng giấy bút (phần nào không mô phỏng được thì dừng ở ví dụ tính tay). Các con số trong ví dụ đều đã được chạy lại bằng code Python ở cuối bài.</p>
 
       <h2 id="tong-quan">Bức tranh toàn cảnh</h2>
+      <p>Cảm biến rung, gia tốc, âm thanh hay dòng điện đều cho ra một điện áp thay đổi liên tục. Bộ chuyển đổi ADC đọc điện áp đó đều đặn <code>Fs</code> lần mỗi giây và đưa ra một <b>mẫu</b> (sample), tức một con số nguyên. <code>Fs</code> gọi là tần số lấy mẫu, đo bằng Hz (lần mỗi giây): Fs = 100 Hz nghĩa là cứ 10 ms có một mẫu.</p>
       <p>Dữ liệu thô vừa nhiều vừa nhiễu: vài trăm mẫu mỗi giây, trong đó rung động thật lẫn với nhiễu điện, trôi baseline và trọng lực. Pipeline DSP là chuỗi khối biến dòng đó thành một vector vài chục byte, đủ nhỏ để một luật ngưỡng hay một mạng nơ-ron nhỏ ra quyết định.</p>
 
       <figure class="diagram">
@@ -218,25 +238,121 @@
           <tr><td>Hop <code>H</code></td><td>Cứ bao nhiêu mẫu mới thì tính lại một khung?</td><td>kết quả mới mỗi <code>H/Fs</code> giây</td></tr>
         </tbody>
       </table>
-      <p>Đổi số tap không buộc phải đổi N, và ngược lại. Các phần sau đi theo đúng thứ tự khối trong sơ đồ.</p>
+      <p>Đổi số tap không buộc phải đổi N, và ngược lại. Các phần sau đi theo đúng thứ tự khối trong sơ đồ. Trước hết là một ví dụ tính tay cho thấy ba con số này tác động thế nào lên một sự kiện thật.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · Fs = 100 Hz, L = 16 tap, N = 128, H = 64</p>
+        <p>Một cú va đập xảy ra ở mẫu thứ 1000, tức <code>t = 10.00 s</code>. Bao lâu thì pipeline báo được?</p>
+        <ol>
+          <li>FIR trễ <code>(16 − 1)/2 = 7.5</code> mẫu, tức 75 ms, nên hình dạng cú va đập ở đầu ra FIR nằm quanh mẫu 1007.5.</li>
+          <li>Khung đầu tiên kết thúc ở mẫu 127 (vừa đủ N = 128 mẫu), rồi cứ mỗi H = 64 mẫu lại chốt thêm một khung. Khung thứ <i>k</i> kết thúc ở mẫu <code>127 + 64k</code>: k = 13 kết thúc ở mẫu 959, k = 14 ở mẫu 1023.</li>
+          <li>Khung 14 gồm các mẫu 896 đến 1023, chứa trọn cú va đập, và chốt ở <code>t = 1024 / 100 = 10.24 s</code>. Kết quả ra chậm 240 ms sau sự kiện.</li>
+          <li>Xấu nhất là sự kiện xảy ra ngay sau khi một khung vừa chốt, và phải đợi khung kế: thêm gần <code>H/Fs = 0.64 s</code> nữa. Muốn phản ứng nhanh hơn thì giảm H (hoặc N), trả giá bằng tính toán thường xuyên hơn.</li>
+        </ol>
+        <p>Về lượng dữ liệu: mỗi 0.64 s có 64 mẫu mới, mỗi mẫu 2 byte là 128 byte, trong khi vector đặc trưng chỉ 48 byte (xem <a href="#vector-dac-trung">phần vector đặc trưng</a>), co 2.7 lần. Với cảm biến rung thật, Fs = 3200 Hz, N = 1024, H = 512, thì 512 mẫu × 2 byte = 1024 byte vẫn co về 48 byte: 21 lần.</p>
+      </div>
 
       <h2 id="lay-mau">Lấy mẫu: Nyquist và aliasing</h2>
-      <p>Lấy mẫu ở tần số <code>Fs</code> chỉ giữ được thông tin tới <code>Fs/2</code>, gọi là tần số Nyquist. Tần số cao hơn không biến mất: nó gập về <code>|f − k·Fs|</code> (k là số nguyên gần nhất) và trộn lẫn với tần số thật. Với Fs = 100 Hz, sóng 70 Hz và sóng 30 Hz cho ra chuỗi mẫu giống hệt nhau:</p>
-      <table>
-        <thead><tr><th>n</th><th>cos(2π · 70 · n / 100)</th><th>cos(2π · 30 · n / 100)</th></tr></thead>
-        <tbody>
-          <tr><td>0</td><td>1.000</td><td>1.000</td></tr>
-          <tr><td>1</td><td>−0.309</td><td>−0.309</td></tr>
-          <tr><td>2</td><td>−0.809</td><td>−0.809</td></tr>
-          <tr><td>3</td><td>0.809</td><td>0.809</td></tr>
-          <tr><td>4</td><td>0.309</td><td>0.309</td></tr>
-        </tbody>
-      </table>
-      <p>Từ chuỗi số đã lấy mẫu, không có cách nào biết đỉnh 30 Hz là rung thật ở 30 Hz hay cộng hưởng ở 70 Hz. Thông tin mất đúng lúc lấy mẫu, nên mọi bộ lọc số đứng sau (FIR, FFT) đều bó tay. Cách duy nhất là chặn năng lượng trên <code>Fs/2</code> <b>trước</b> khâu lấy mẫu: bộ lọc analog đặt trước ADC, hoặc bộ lọc số trong cảm biến (thường gọi là DLPF) chạy ở tốc độ mẫu cao rồi mới giảm xuống Fs. Bộ lọc thực không dốc tuyệt đối, nên Fs thường chọn từ 2.5 lần tần số cao nhất cần quan sát trở lên.</p>
+      <p>ADC chỉ nhìn tín hiệu ở những thời điểm cách nhau <code>1/Fs</code> giây và bỏ qua mọi thứ nằm giữa hai lần nhìn. Muốn nhận ra một sóng thì mỗi chu kỳ của nó cần ít nhất hai mẫu, nên ở tần số lấy mẫu <code>Fs</code> ta chỉ phân biệt được các sóng tới <code>Fs/2</code>, gọi là <b>tần số Nyquist</b>. Sóng nhanh hơn không biến mất: nó "gập" xuống thành một tần số thấp hơn và đóng giả làm sóng thật. Hiện tượng đó gọi là <b>aliasing</b>.</p>
+      <p>Tần số hiện ra sau khi lấy mẫu là <code>|f − k·Fs|</code>, với k là số nguyên làm kết quả nhỏ nhất (tức <code>f/Fs</code> làm tròn).</p>
+
+      <section class="sim" id="sim-alias" aria-label="Mô phỏng lấy mẫu: tần số thật và tần số hiện ra">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Tham số">
+            <label>Tần số tín hiệu <input name="f" type="range" min="1" max="150" step="1" value="70"><output data-out="f"></output></label>
+            <label>Tần số lấy mẫu
+              <select name="fs">
+                <option value="50">50 Hz</option>
+                <option value="100" selected>100 Hz</option>
+                <option value="200">200 Hz</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Sóng cos thật, các điểm mẫu và sóng mà các điểm mẫu kể lại"></canvas>
+        <div class="legend">
+          <span style="--c: var(--faint)">sóng thật</span>
+          <span style="--c: var(--indigo)">các điểm mẫu</span>
+          <span style="--c: var(--accent)">sóng hiện ra sau khi lấy mẫu</span>
+        </div>
+        <div class="sim-stats">
+          <span>Nyquist: <b data-out="nyq">–</b></span>
+          <span>Tần số hiện ra: <b data-out="alias">–</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> giữ Fs = 100 Hz và kéo tần số từ 10 lên 50 Hz (đúng Nyquist, các mẫu nhảy xen kẽ +1, −1), rồi vượt qua nó: các chấm vẫn nằm trên sóng xám, nhưng sóng đỏ chậm hơn cũng đi qua đúng các chấm đó. Thử 100 Hz: mọi mẫu đều bằng 1, tức DC. Đổi Fs sang 200 Hz thì 70 Hz lại nằm dưới Nyquist và hiện ra đúng.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · Fs = 100 Hz, Nyquist = 50 Hz</p>
+        <table>
+          <thead><tr><th>f (Hz)</th><th>k</th><th>|f − k·100|</th><th>Hiện ra ở</th></tr></thead>
+          <tbody>
+            <tr><td>30</td><td>0</td><td>30</td><td>30 Hz, đúng (dưới Nyquist)</td></tr>
+            <tr><td>70</td><td>1</td><td>|70 − 100| = 30</td><td>30 Hz</td></tr>
+            <tr><td>130</td><td>1</td><td>|130 − 100| = 30</td><td>30 Hz</td></tr>
+            <tr><td>95</td><td>1</td><td>|95 − 100| = 5</td><td>5 Hz</td></tr>
+            <tr><td>100</td><td>1</td><td>0</td><td>0 Hz (DC)</td></tr>
+          </tbody>
+        </table>
+        <p>Kiểm lại bằng số. Ở mẫu <code>n = 1</code>, sóng 70 Hz có pha <code>2π · 70 / 100 = 252°</code>, mà <code>cos 252° = cos(360° − 108°) = cos 108° = −0.309</code>. Sóng 30 Hz có pha 108° ngay từ đầu, nên cùng giá trị. Cả năm mẫu đầu:</p>
+        <table>
+          <thead><tr><th>n</th><th>cos(2π · 70 · n / 100)</th><th>cos(2π · 30 · n / 100)</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>1.000</td><td>1.000</td></tr>
+            <tr><td>1</td><td>−0.309</td><td>−0.309</td></tr>
+            <tr><td>2</td><td>−0.809</td><td>−0.809</td></tr>
+            <tr><td>3</td><td>0.809</td><td>0.809</td></tr>
+            <tr><td>4</td><td>0.309</td><td>0.309</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Từ chuỗi số đã lấy mẫu, không có cách nào biết đỉnh 30 Hz là rung thật ở 30 Hz hay cộng hưởng ở 70 Hz. Thông tin mất đúng lúc lấy mẫu, nên mọi bộ lọc số đứng sau (FIR, FFT) đều bó tay. Cách duy nhất là chặn năng lượng trên <code>Fs/2</code> <b>trước</b> khâu lấy mẫu: bộ lọc analog đặt trước ADC, hoặc bộ lọc số trong cảm biến (thường gọi là DLPF) chạy ở tốc độ mẫu cao rồi mới giảm xuống Fs. Bộ lọc thực không dốc tuyệt đối, nên Fs thường chọn từ 2.5 lần tần số cao nhất cần quan sát trở lên: muốn thấy rung tới 40 Hz thì lấy Fs từ 100 Hz.</p>
 
       <h2 id="so-nguyen">Số nguyên thay cho dấu phẩy động</h2>
-      <p>Trên MCU không có FPU, hay trong FPGA, phép nhân <code>float32</code> đắt hơn phép nhân số nguyên rất nhiều: một phép nhân 16 bit vừa khít một khối DSP có sẵn trên chip, còn dấu phẩy động cần cả mảng logic để chuẩn hoá số mũ và làm tròn. Số nguyên còn cho kết quả tất định đến từng bit, nên bạn chạy cùng thuật toán trên PC rồi so với thiết bị được (xem <a href="#kiem-chung">phần kiểm chứng</a>). Cái giá là bạn phải tự quản lý dấu phẩy bằng Q-format.</p>
-      <p>Q-format <code>Q(I).(F)</code> lưu giá trị thật dưới dạng số nguyên: <code>giá trị = raw / 2<sup>F</sup></code>. Hệ số FIR thường dùng Q1.15 (1 bit dấu, 15 bit phân số): <code>raw = 13190</code> nghĩa là <code>13190 / 32768 ≈ 0.4026</code>. Bốn quy tắc sống còn:</p>
+      <p>Trên MCU không có FPU, hay trong FPGA, phép nhân <code>float32</code> đắt hơn phép nhân số nguyên rất nhiều: một phép nhân 16 bit vừa khít một khối DSP có sẵn trên chip, còn dấu phẩy động cần cả mảng logic để chuẩn hoá số mũ và làm tròn. Số nguyên còn cho kết quả tất định đến từng bit, nên bạn chạy cùng thuật toán trên PC rồi so với thiết bị được (xem <a href="#kiem-chung">phần kiểm chứng</a>). Cái giá là bạn phải tự quản lý dấu phẩy.</p>
+      <p><b>Q-format</b> là cách lưu một số thực bằng số nguyên: nhân nó với 2<sup>F</sup> rồi làm tròn. <code>Q1.15</code> dành 1 bit cho dấu và 15 bit cho phần phân số, nên lưu được từ −1 đến 1 − 2<sup>-15</sup>, với bước nhỏ nhất (gọi là 1 LSB) là 2<sup>-15</sup> ≈ 0.00003. Ví dụ <code>0.5 → 0.5 × 32768 = 16384</code>, và ngược lại <code>13190 / 32768 ≈ 0.4026</code>. Cộng hai số Q.15 chỉ là cộng hai số nguyên; mọi rắc rối nằm ở phép nhân và ở chuyện tràn.</p>
+
+      <section class="sim" id="sim-q" aria-label="Mô phỏng nhân và cộng hai số Q1.F bằng số nguyên">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Đầu vào">
+            <label>a <input name="a" type="range" min="-1" max="0.999" step="0.001" value="0.6"><output data-out="a"></output></label>
+            <label>b <input name="b" type="range" min="-1" max="0.999" step="0.001" value="0.6"><output data-out="b"></output></label>
+            <label>Định dạng
+              <select name="bits">
+                <option value="15" selected>Q1.15 (16 bit)</option>
+                <option value="11">Q1.11 (12 bit)</option>
+                <option value="7">Q1.7 (8 bit)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Phép tính</th><th>Số nguyên</th><th>Giá trị thật</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="sim-stats">
+          <span>a × b thật: <b data-out="truth">–</b></span>
+        </div>
+        <div class="sim-actions">
+          <button class="btn" type="button" data-act="bias">Thử 10 000 phép nhân ngẫu nhiên</button>
+        </div>
+        <p class="dsp-status" data-out="bias"></p>
+      </section>
+      <p class="try"><b>Thử:</b> giữ a = b = 0.6 và so hai dòng "dịch phải": cắt xuống lệch −0.72 LSB, cộng nửa đơn vị lệch +0.28 LSB. Một cặp số thì chưa nói lên gì, nên bấm nút: trên 10 000 cặp, cắt xuống lệch trung bình −0.5 LSB còn cộng nửa đơn vị lệch 0. Kéo cả a và b về −1 để thấy chỗ duy nhất phép nhân tràn. Đổi sang Q1.7 để thấy 1 LSB lớn cỡ nào khi ít bit. Kéo a = 0.75, b = 0.5 để so quấn vòng với bão hoà ở phép cộng.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · Q1.15, a = b = 0.6</p>
+        <ol>
+          <li><code>raw(0.6) = round(0.6 × 32768) = round(19660.8) = 19661</code>. Số nguyên này đại diện cho 0.600006: lượng tử hoá lệch tối đa nửa LSB.</li>
+          <li>Nhân hai số nguyên: <code>19661 × 19661 = 386 554 921</code>. Đơn vị bây giờ là 2<sup>-30</sup>, không còn là 2<sup>-15</sup>.</li>
+          <li>Về lại Q.15 là chia cho 32768: <code>386 554 921 / 32768 = 11 796.72</code>. Phải bỏ phần lẻ .72, và có hai cách. Cắt xuống (<code>&gt;&gt; 15</code>) cho 11 796, lệch −0.72 LSB. Cộng nửa đơn vị rồi dịch (<code>(… + 16384) &gt;&gt; 15</code>) cho 11 797, lệch +0.28 LSB.</li>
+          <li>Lệch chưa đến một LSB nghe vô hại, nhưng cắt xuống luôn lệch về <em>cùng một phía</em>: dưới 0, trung bình −0.5 LSB trên mọi cặp số, còn làm tròn thì lệch cả hai phía và trung bình về 0. FIR 16 tap cộng 16 tích; nếu mỗi tích cắt riêng rồi mới cộng thì lệch tới <code>16 × 0.5 = 8</code> LSB, và đó là bias không triệt tiêu theo thời gian. Cộng dồn đủ rộng rồi làm tròn một lần chỉ lệch tối đa 0.5 LSB.</li>
+          <li>Phép cộng cũng có bẫy. <code>0.75 + 0.5</code> là <code>24576 + 16384 = 40960</code>, vượt 32767. Quấn vòng trong 16 bit cho <code>40960 − 65536 = −24576</code>, tức <b>−0.75</b>: tín hiệu đổi dấu mà không báo gì. Bão hoà cho 32767, tức 0.99997. Phép nhân chỉ tràn đúng một trường hợp: <code>(−1) × (−1) = +1</code>, mà Q1.15 không biểu diễn được +1.</li>
+        </ol>
+      </div>
+
+      <p>Từ ví dụ trên rút ra bốn quy tắc sống còn:</p>
       <ol>
         <li><b>Nhân xong phải dịch bit.</b> Nhân hai số Q.15 ra kết quả Q.30, nên phải dịch phải 15 bit để về lại Q.15. Với 0.5 × 0.5: <code>16384 × 16384 = 268 435 456</code>, dịch phải 15 bit được <code>8192</code>, tức 0.25. Quên dịch không gây lỗi biên dịch hay crash, chỉ ra con số sai.</li>
         <li><b>Làm tròn, đừng cắt.</b> Dịch phải thuần tuý luôn làm tròn xuống, lệch trung bình nửa đơn vị cuối ở mỗi lần dịch. Độ lệch này luôn về cùng một phía nên không triệt tiêu theo thời gian mà thành bias hệ thống; nếu dịch từng tích trước khi cộng, nó còn nhân lên theo số tap. Cộng nửa đơn vị (<code>1 &lt;&lt; 14</code>) trước khi dịch, và tốt nhất là cộng dồn đủ rộng rồi chỉ làm tròn một lần ở cuối, như <code>fir_q15</code> bên dưới.</li>
@@ -245,14 +361,63 @@
       </ol>
       <pre><code class="language-c" data-from="#fixed-code" data-filename="fixed_point.h"></code></pre>
       <div class="note">
-        <p>Lỗi Q-format hiếm khi báo lỗi: compiler không biết quy ước sống trong đầu người viết. Cách bắt hiệu quả nhất là so với bản dấu phẩy động tham chiếu trên cùng một tín hiệu, như mô tả ở phần kiểm chứng. Các ví dụ JavaScript trong bài viết bằng dấu phẩy động cho dễ đọc; thuật toán giữ nguyên khi chuyển sang số nguyên, chỉ cần thêm việc quản lý Q-format theo bốn quy tắc trên.</p>
+        <p>Lỗi Q-format hiếm khi báo lỗi: compiler không biết quy ước sống trong đầu người viết. Cách bắt hiệu quả nhất là so với bản dấu phẩy động tham chiếu trên cùng một tín hiệu, như mô tả ở phần kiểm chứng. Các ví dụ Python trong bài viết bằng dấu phẩy động cho dễ đọc; thuật toán giữ nguyên khi chuyển sang số nguyên, chỉ cần thêm việc quản lý Q-format theo bốn quy tắc trên.</p>
       </div>
 
       <h2 id="bo-loc-fir">Bộ lọc FIR</h2>
-      <p>FIR tính mỗi mẫu ra từ <code>L</code> mẫu vào gần nhất, mỗi mẫu nhân một hệ số (tap):</p>
+      <p>Bộ lọc FIR (finite impulse response) tính mỗi mẫu ra bằng cách lấy <code>L</code> mẫu vào gần nhất, nhân mỗi mẫu với một hệ số (gọi là tap) rồi cộng lại:</p>
       <p class="eq">y[n] = Σ h[k] · x[n − k],   k = 0 … L−1</p>
+      <p>Ví dụ đơn giản nhất là trung bình trượt, khi mọi hệ số đều bằng 1/L. Chọn hệ số khác đi thì cùng công thức đó cắt được những dải tần khác. Công dụng ở đây: nhiễu thường nằm ở tần số cao hơn rung động đáng quan tâm, nên lọc thông thấp trước khi tính đặc trưng giúp RMS và kurtosis không bị nhiễu kéo lệch.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · trung bình trượt 3 tap, <code>h = [1/3, 1/3, 1/3]</code></p>
+        <p>Dòng vào <code>x = [2, 4, 3, 9, 5, 4]</code>, mẫu 9 là một gai nhiễu. Mỗi mẫu ra là trung bình của mẫu đó và hai mẫu liền trước:</p>
+        <table>
+          <thead><tr><th>n</th><th>Tính</th><th>y[n]</th></tr></thead>
+          <tbody>
+            <tr><td>2</td><td>(2 + 4 + 3) / 3</td><td>3.00</td></tr>
+            <tr><td>3</td><td>(4 + 3 + 9) / 3</td><td>5.33</td></tr>
+            <tr><td>4</td><td>(3 + 9 + 5) / 3</td><td>5.67</td></tr>
+            <tr><td>5</td><td>(9 + 5 + 4) / 3</td><td>6.00</td></tr>
+          </tbody>
+        </table>
+        <p>Chỉ có 4 mẫu ra từ 6 mẫu vào (<code>6 − 3 + 1</code>): hai mẫu đầu thiếu lịch sử. Gai 9 bị nén còn tối đa 5.67, nhưng mỗi <code>y[n]</code> nằm ở tâm đoạn <code>x[n−2…n]</code>, tức ứng với <code>x[n−1]</code>: đầu ra trễ 1 mẫu, đúng bằng <code>(L − 1)/2</code>.</p>
+      </div>
+
       <p>FIR không có hồi tiếp nên luôn ổn định, và nếu hệ số đối xứng (<code>h[k] = h[L−1−k]</code>) thì pha tuyến tính: mọi tần số bị trễ cùng một lượng nên dạng sóng không méo. Cái giá là cần nhiều tap hơn bộ lọc IIR cho cùng độ dốc.</p>
-      <p>Hệ số được thiết kế <b>offline, một lần</b>, bằng windowed-sinc. Bộ lọc thông thấp lý tưởng có đáp ứng xung là hàm sinc kéo dài vô hạn. Cắt cụt thô thành L số gây gợn Gibbs: suy hao stopband không vượt quá khoảng 21 dB dù tăng L bao nhiêu. Nhân sinc với cửa sổ Hamming (giảm êm về hai đầu) nâng suy hao lên khoảng 53 dB, đổi lại dải chuyển tiếp rộng hơn, cỡ <code>3.3·Fs/L</code> Hz. Quy trình thiết kế:</p>
+      <p>Hệ số được thiết kế <b>offline, một lần</b>, bằng windowed-sinc. Bộ lọc thông thấp lý tưởng có đáp ứng xung là hàm sinc kéo dài vô hạn. Cắt cụt thô thành L số (tức nhân với cửa sổ chữ nhật) gây gợn Gibbs: suy hao stopband đứng yên ở cỡ 27 dB dù tăng L bao nhiêu. Nhân sinc với cửa sổ Hamming (giảm êm về hai đầu) nâng suy hao lên cỡ 53 dB, đổi lại dải chuyển tiếp rộng hơn, cỡ <code>3.3·Fs/L</code> Hz. (Hai con số đo ở mô phỏng bên dưới, từ <code>fc + 2·Fs/L</code> trở lên, tức bỏ qua dải chuyển tiếp.) Mô phỏng dưới đây cho bạn kéo L và fc, đổi giữa hai cửa sổ thiết kế và nhìn hệ quả.</p>
+
+      <section class="sim" id="sim-fir" aria-label="Mô phỏng bộ lọc FIR: hệ số, đáp ứng tần số và kết quả lọc, Fs = 100 Hz">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Thiết kế">
+            <label>Số tap L <input name="taps" type="range" min="4" max="64" step="1" value="16"><output data-out="taps"></output></label>
+            <label>Tần số cắt <input name="fc" type="range" min="2" max="45" step="1" value="20"><output data-out="fc"></output></label>
+            <label>Cửa sổ thiết kế
+              <select name="win">
+                <option value="hamming" selected>Hamming</option>
+                <option value="rect">Chữ nhật (cắt cụt)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <canvas class="h-sm" role="img" aria-label="Hệ số của bộ lọc, đối xứng quanh tap giữa"></canvas>
+        <canvas class="h-md" role="img" aria-label="Đáp ứng tần số của bộ lọc theo dB, so với cửa sổ thiết kế còn lại"></canvas>
+        <canvas class="h-md" role="img" aria-label="Tín hiệu thử trước và sau khi lọc, đường sau lọc trễ hơn"></canvas>
+        <div class="legend">
+          <span style="--c: var(--indigo)">cửa sổ đang chọn, tín hiệu sau lọc</span>
+          <span style="--c: var(--faint)">cửa sổ còn lại, tín hiệu thô</span>
+          <span style="--c: var(--accent)">fc và tap giữa</span>
+        </div>
+        <div class="sim-stats">
+          <span>Tại fc: <b data-out="gfc">–</b></span>
+          <span>Tại 37 Hz: <b data-out="g37">–</b></span>
+          <span>Stopband (f ≥ fc + 2·Fs/L): <b data-out="stop">–</b></span>
+          <span>Trễ: <b data-out="delay">–</b></span>
+        </div>
+      </section>
+      <p class="try"><b>Thử:</b> với 16 tap Hamming, tại fc đúng −6.0 dB, tone 37 Hz bị chặn 62 dB và stopband −54 dB. Kéo L xuống 6: tone 37 Hz chỉ còn bị chặn 17 dB, lọt qua nhiều hơn rõ rệt, nhưng trễ giảm còn 25 ms. Đổi sang cửa sổ chữ nhật: stopband tụt xuống −27 dB, và kéo L lên 64 vẫn −27 dB (trong khi trễ lên tới 315 ms). Cùng L = 64, Hamming cho −53 dB.</p>
+
+      <p>Quy trình thiết kế:</p>
       <ol>
         <li>Chốt Fs, tần số cắt <code>fc</code>, độ rộng dải chuyển tiếp <code>Δf</code> và độ suy hao cần có.</li>
         <li>Ước lượng số tap. Với Hamming, <code>L ≈ 3.3·Fs/Δf</code>: Fs = 100 Hz và cần chuyển từ giữ sang chặn trong 10 Hz thì L ≈ 33. Thiết kế tối ưu (equiripple, <code>scipy.signal.remez</code>) cần ít tap hơn cho cùng yêu cầu.</li>
@@ -260,13 +425,88 @@
         <li>Kiểm tra đáp ứng tần số bằng dấu phẩy động.</li>
         <li>Lượng tử hoá sang Q1.15, chỉnh tap giữa để tổng đúng bằng 2<sup>15</sup>, rồi <b>kiểm tra lại đáp ứng</b>: sai số làm tròn đủ để làm đổi suy hao stopband.</li>
       </ol>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · thiết kế L = 5 tap, fc = 20 Hz, Fs = 100 Hz</p>
+        <p>Đặt <code>f = fc/Fs = 0.2</code> và tâm đối xứng ở <code>(L − 1)/2 = 2</code>. Với mỗi tap, lấy hàm sinc tại <code>x = n − 2</code> (sinc(u) = sin(πu)/(πu), sinc(0) = 1), nhân với <code>2f = 0.4</code>, rồi nhân cửa sổ Hamming <code>w[n] = 0.54 − 0.46·cos(2πn/4)</code>:</p>
+        <table>
+          <thead><tr><th>n</th><th>x = n − 2</th><th>0.4 · sinc(0.4x)</th><th>w[n]</th><th>Tích</th><th>h[n] = Tích / 0.7419</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>−2</td><td>0.0935</td><td>0.08</td><td>0.0075</td><td>0.0101</td></tr>
+            <tr><td>1</td><td>−1</td><td>0.3027</td><td>0.54</td><td>0.1635</td><td>0.2203</td></tr>
+            <tr><td>2</td><td>0</td><td>0.4000</td><td>1.00</td><td>0.4000</td><td>0.5391</td></tr>
+            <tr><td>3</td><td>1</td><td>0.3027</td><td>0.54</td><td>0.1635</td><td>0.2203</td></tr>
+            <tr><td>4</td><td>2</td><td>0.0935</td><td>0.08</td><td>0.0075</td><td>0.0101</td></tr>
+          </tbody>
+        </table>
+        <p>Tổng các tích là 0.7419; chia cho nó để <code>Σh = 1</code>, tức độ lợi tại 0 Hz đúng bằng 1. Kiểm lại đáp ứng ở vài tần số (dùng <code>H(f) = Σ h[k]·e<sup>−j2πfk/Fs</sup></code>): tại Nyquist 50 Hz, các hạng tử đổi dấu xen kẽ nên <code>H = h₀ − h₁ + h₂ − h₃ + h₄ = 0.0101 − 0.2203 + 0.5391 − 0.2203 + 0.0101 = 0.1186</code>, tức −18.5 dB.</p>
+        <p>Hai điều rút ra từ bộ lọc 5 tap này, bạn có thể kiểm lại bằng mô phỏng: tại 37 Hz nó chỉ còn 0.236 (−12.5 dB), còn xa mới đủ để chặn tone đó, trong khi bản 16 tap cho 0.0008 (−62 dB). Và tại fc = 20 Hz nó cho 0.659 (−3.6 dB) chứ không phải −6 dB: <code>fc</code> chỉ là điểm −6 dB khi L đủ lớn (với 16 tap là 0.499).</p>
+      </div>
+
       <p>Bộ lọc đối xứng trễ tín hiệu đúng <code>(L−1)/2</code> mẫu: 16 tap ở 100 Hz là 7.5 mẫu, tức 75 ms. Trong mô phỏng, đường xanh luôn chậm hơn đường xám đúng chừng đó. Độ trễ vật lý này tách biệt với thời gian quan sát và chu kỳ cập nhật ở phần cửa sổ.</p>
       <p>Một chi tiết hay sai: lịch sử <code>L−1</code> mẫu của FIR phải sống xuyên qua các khung và <b>không reset</b> ở đầu khung. Reset thì những mẫu đầu mỗi khung được lọc theo lịch sử giả toàn số 0, tạo transient giả đúng ở chỗ RMS và kurtosis đang đo.</p>
-      <pre><code data-from="#fir-code" data-filename="fir.js"></code></pre>
+      <pre><code class="language-python" data-from="#fir-py" data-filename="fir.py"></code></pre>
 
       <h2 id="cua-so">Cửa sổ trượt: N, hop và chồng lấp</h2>
-      <p>RMS, kurtosis và FFT đều cần một đoạn tín hiệu, không phải một mẫu. Pipeline giữ N mẫu đã lọc gần nhất trong ring buffer (bộ nhớ cố định, mẫu mới ghi đè mẫu cũ nhất) và tính lại một khung mỗi H mẫu mới. Tỉ lệ chồng lấp là <code>1 − H/N</code>. Ring buffer này khác ring buffer lịch sử L mẫu của FIR: một cái phục vụ bộ lọc, một cái gom khung.</p>
-      <p>Chồng lấp cần thiết vì sự kiện không chờ ranh giới khung. Giả sử một cú va đập dài 8 mẫu rơi đúng chỗ hai khung liền kề gặp nhau: mỗi khung chỉ thấy một nửa, và kurtosis của từng nửa thấp hơn nhiều so với cả cú va đập. Với chồng lấp 50% luôn có một khung chứa trọn nó.</p>
+      <p>RMS, kurtosis và FFT đều là phép tính trên một đoạn tín hiệu, không phải một mẫu. Pipeline giữ N mẫu đã lọc gần nhất trong ring buffer (bộ nhớ cố định, mẫu mới ghi đè mẫu cũ nhất), gọi đoạn đó là một <b>khung</b>, và tính lại một khung mỗi H mẫu mới. N là độ dài khung, H (hop) là bước trượt, và tỉ lệ chồng lấp là <code>1 − H/N</code>: N = 128, H = 64 là chồng lấp 50%. Ring buffer này khác ring buffer lịch sử L mẫu của FIR: một cái phục vụ bộ lọc, một cái gom khung.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · dòng 16 mẫu, N = 8, H = 4</p>
+        <table>
+          <thead><tr><th>Khung</th><th>Gồm các mẫu</th><th>Chốt khi nhận mẫu thứ</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>0 … 7</td><td>8</td></tr>
+            <tr><td>2</td><td>4 … 11</td><td>12</td></tr>
+            <tr><td>3</td><td>8 … 15</td><td>16</td></tr>
+          </tbody>
+        </table>
+        <p>Số khung là <code>⌊(T − N)/H⌋ + 1 = (16 − 8)/4 + 1 = 3</code>, chồng lấp <code>1 − 4/8 = 50%</code>: mỗi mẫu ở giữa nằm trong hai khung. Với 640 mẫu, N = 128, H = 64: <code>(640 − 128)/64 + 1 = 9</code> khung, và khung đầu phải đợi tới mẫu thứ 128 (1.28 s) mới có.</p>
+      </div>
+
+      <p>Chồng lấp cần thiết vì sự kiện không chờ ranh giới khung. Mô phỏng dưới đây đặt một cú va đập dài 8 mẫu (vùng đỏ nhạt) lên một nền rung nhẹ và chạy một luật ngưỡng đơn giản: khung nào có kurtosis vượt ngưỡng thì báo. Mỗi hàng ngang là một khung.</p>
+
+      <section class="sim" id="sim-win" aria-label="Mô phỏng cửa sổ trượt: cú va đập rơi vào đâu so với ranh giới khung, Fs = 100 Hz">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Cửa sổ">
+            <label>Cửa sổ N
+              <select name="n">
+                <option value="64">64 mẫu</option>
+                <option value="128" selected>128 mẫu</option>
+                <option value="256">256 mẫu</option>
+              </select>
+            </label>
+            <label>Chồng lấp
+              <select name="overlap">
+                <option value="0" selected>0%</option>
+                <option value="0.5">50%</option>
+                <option value="0.75">75%</option>
+              </select>
+            </label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Cú va đập và ngưỡng">
+            <label>Vị trí cú va đập <input name="pos" type="range" min="0" max="632" step="1" value="124"><output data-out="pos"></output></label>
+            <label>Độ mạnh <input name="amp" type="range" min="1" max="4" step="0.1" value="2"><output data-out="amp"></output></label>
+            <label>Ngưỡng kurtosis <input name="thr" type="range" min="2.5" max="8" step="0.1" value="3.5"><output data-out="thr"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Tín hiệu có một cú va đập và các khung chồng lên nhau, khung vượt ngưỡng tô đỏ"></canvas>
+        <canvas class="h-sm" role="img" aria-label="Kurtosis của từng khung so với ngưỡng"></canvas>
+        <div class="legend">
+          <span style="--c: var(--faint)">khung không chạm cú va đập</span>
+          <span style="--c: var(--indigo)">khung chạm cú va đập, dưới ngưỡng</span>
+          <span style="--c: var(--accent)">kurtosis vượt ngưỡng (phát hiện)</span>
+        </div>
+        <div class="sim-stats">
+          <span>Số khung: <b data-out="count">–</b></span>
+          <span>Khung thấy trọn cú va đập: <b data-out="full">–</b></span>
+          <span>Kurtosis cao nhất: <b data-out="kmax">–</b></span>
+          <span>Khung vượt ngưỡng: <b data-out="caught">–</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> lúc đầu chồng lấp 0% và cú va đập (mẫu 124 đến 131) vắt qua ranh giới ở mẫu 128: mỗi khung chỉ thấy 4/8 mẫu và kurtosis chỉ đạt 2.56 và 3.37, dưới ngưỡng 3.5, nên pipeline bỏ lỡ sự kiện. Chuyển sang chồng lấp 50%: khung giữa thấy trọn 8 mẫu, kurtosis lên 3.73 và vượt ngưỡng. Rồi kéo vị trí tới giữa một khung (ví dụ mẫu 40): lần này 0% cũng đủ, nhưng thực tế bạn không biết sự kiện rơi ở đâu. Thử thêm độ mạnh và ngưỡng để thấy sự kiện càng yếu thì càng dễ bị bỏ lỡ.</p>
+      <p>Lý do là mỗi khung chỉ thấy một phần sự kiện, và độ lệch của RMS hay kurtosis so với nền tỉ lệ với phần được thấy. Với RMS thì gần như tuyến tính: phần phương sai vượt nền của một khung xấp xỉ năng lượng cú va đập nằm trong khung, chia cho N, nên một khung chỉ thấy nửa cú va đập thì chỉ nhận chừng nửa độ lệch. Kurtosis không tuyến tính như vậy (cú va đập mạnh thì nửa cú va đập vẫn nổi bật), nhưng với sự kiện vừa phải thì kết quả như bạn vừa thấy. Chồng lấp 50% đổi lại việc tính toán gấp đôi; 75% gấp bốn.</p>
+
       <p>Kích thước N là phép đánh đổi giữa hai thứ, nên đừng chọn tuỳ ý:</p>
       <table>
         <thead><tr><th>N (mẫu)</th><th>Độ phân giải Δf = Fs/N</th><th>Thời gian quan sát N/Fs</th></tr></thead>
@@ -276,11 +516,49 @@
           <tr><td>256</td><td>0.390625 Hz</td><td>2.56 s</td></tr>
         </tbody>
       </table>
-      <p>(Bảng tính cho Fs = 100 Hz.) N lớn phân biệt được hai tần số gần nhau hơn nhưng phản ứng chậm hơn và giả định tín hiệu ổn định lâu hơn. FFT radix-2 cần N là luỹ thừa của 2. Số khung từ T mẫu là <code>(T − N)/H + 1</code>: 640 mẫu với N = 128, H = 64 cho 9 khung.</p>
+      <p>(Bảng tính cho Fs = 100 Hz.) N lớn phân biệt được hai tần số gần nhau hơn nhưng phản ứng chậm hơn và giả định tín hiệu ổn định lâu hơn. FFT radix-2 cần N là luỹ thừa của 2.</p>
 
       <h2 id="khu-dc">Detrend trước khi đo</h2>
-      <p>Cảm biến hiếm khi dao động quanh 0: gia tốc kế có trọng lực, cảm biến dòng có offset. Thành phần hằng số này không mang thông tin về rung, nhưng lại chi phối mọi phép đo vì <code>mean(x²) = mean(x)² + variance</code>, tức là <code>RMS² = DC² + RMS<sub>AC</sub>²</code>. Với DC = 1000, rung hình sin biên độ 10 cho RMS = 1000.025, còn biên độ 100 chỉ cho 1002.5: rung mạnh gấp mười lần mà RMS nhích 0.25%, và trong số nguyên phần nhích đó dễ chìm dưới đơn vị cuối.</p>
-      <p>Trong phổ, DC là một đỉnh khổng lồ ở bin 0, và sidelobe của cửa sổ rải nó sang các bin lân cận (thử tắt Detrend khi dùng Hann). Cách đơn giản nhất là trừ trung bình của chính khung, đủ tốt khi baseline gần như không đổi trong <code>N/Fs</code> giây. Nếu baseline trôi: trừ đường thẳng khớp nhất theo bình phương tối thiểu (linear detrend), hoặc dùng bộ lọc thông cao chạy liên tục theo từng mẫu. Mọi đặc trưng ở các phần sau đều tính trên khung đã detrend.</p>
+      <p>Cảm biến hiếm khi dao động quanh 0: gia tốc kế luôn đo thêm trọng lực, cảm biến dòng có offset. Thành phần hằng số này gọi là DC. Nó không mang thông tin về rung, nhưng lại chi phối mọi phép đo. Lý do nằm ở một đẳng thức: viết mỗi mẫu là <code>x = m + d</code>, với m là trung bình của khung và d là phần dao động quanh nó (nên <code>mean(d) = 0</code>), thì</p>
+      <p class="eq">mean(x²) = m² + 2m·mean(d) + mean(d²) = m² + mean(d²)</p>
+      <p>tức là <code>RMS² = DC² + RMS<sub>AC</sub>²</code>. DC bình phương cộng thẳng vào, bất kể rung nhiều hay ít.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · hai kiểu thành phần không mong muốn</p>
+        <p><b>DC hằng số.</b> Với DC = 1000, rung hình sin biên độ 10 có <code>RMS<sub>AC</sub> = 10/√2 = 7.07</code>, nên <code>RMS = √(1000² + 7.07²) = √1 000 050 = 1000.025</code>. Rung mạnh gấp mười, biên độ 100, có <code>RMS<sub>AC</sub> = 70.7</code> và <code>RMS = √(1 000 000 + 5000) = 1002.5</code>. Rung mạnh gấp mười mà RMS chỉ nhích 0.25%, và trong số nguyên phần nhích đó dễ chìm dưới đơn vị cuối.</p>
+        <p><b>Baseline trôi.</b> Một đường dốc đều tăng R trong khung có phương sai <code>R²/12</code>. Với R = 5 là <code>25/12 = 2.08</code>. Cộng vào sin biên độ 1 (<code>RMS<sub>AC</sub>² = 0.5</code>): trừ trung bình xong vẫn còn dốc, nên <code>RMS ≈ √(0.5 + 2.08) = 1.6</code> thay vì <code>0.71</code>, sai hơn hai lần. Trừ cả đường thẳng khớp nhất thì dốc biến mất và RMS về lại 0.71.</p>
+      </div>
+
+      <section class="sim" id="sim-detrend" aria-label="Mô phỏng detrend: RMS khi có DC và baseline trôi, khung 128 mẫu">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Tín hiệu">
+            <label>DC <input name="dc" type="range" min="0" max="10" step="0.5" value="3"><output data-out="dc"></output></label>
+            <label>Baseline trôi <input name="drift" type="range" min="0" max="8" step="0.5" value="5"><output data-out="drift"></output></label>
+            <label>Biên độ rung <input name="amp" type="range" min="0.2" max="2" step="0.1" value="1"><output data-out="amp"></output></label>
+            <label>Đang vẽ
+              <select name="method">
+                <option value="none">khung gốc</option>
+                <option value="mean" selected>trừ trung bình</option>
+                <option value="line">trừ đường thẳng</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Khung tín hiệu có DC và dốc, và khung sau detrend"></canvas>
+        <div class="legend">
+          <span style="--c: var(--faint)">khung gốc</span>
+          <span style="--c: var(--indigo)">sau detrend</span>
+        </div>
+        <div class="sim-stats">
+          <span>RMS không detrend: <b data-out="r0">–</b></span>
+          <span>RMS trừ trung bình: <b data-out="r1">–</b></span>
+          <span>RMS trừ đường thẳng: <b data-out="r2">–</b></span>
+          <span>Đúng, biên độ/√2: <b data-out="truth">–</b></span>
+        </div>
+      </section>
+      <p class="try"><b>Thử:</b> đặt Baseline trôi = 0 và DC = 0: cả ba cách cho gần đúng 0.71. Tăng DC lên 10: RMS không detrend lên cỡ 10 trong khi rung thật vẫn 0.71, còn hai cách detrend không đổi. Rồi kéo Baseline trôi lên 5 (DC bất kỳ): trừ trung bình chỉ còn 1.56 so với 0.71 đúng, còn trừ đường thẳng cho 0.70.</p>
+
+      <p>Trong phổ, DC là một đỉnh khổng lồ ở bin 0, và sidelobe của cửa sổ rải nó sang các bin lân cận (thử tắt Detrend ở mô phỏng đầu bài khi dùng Hann). Cách đơn giản nhất là trừ trung bình của chính khung, đủ tốt khi baseline gần như không đổi trong <code>N/Fs</code> giây. Nếu baseline trôi: trừ đường thẳng khớp nhất theo bình phương tối thiểu (<code>detrend_linear</code> trong <code>features.py</code>), hoặc dùng bộ lọc thông cao chạy liên tục theo từng mẫu. Mọi đặc trưng ở các phần sau đều tính trên khung đã detrend.</p>
 
       <h2 id="thoi-gian">Đặc trưng miền thời gian</h2>
       <p>Gọi <code>d</code> là khung đã detrend gồm N mẫu. Năm con số thường dùng:</p>
@@ -294,22 +572,151 @@
           <tr><td>Kurtosis</td><td><code>N·Σd⁴ / (Σd²)²</code></td><td>độ "nhọn": có xung giật cục hay không</td></tr>
         </tbody>
       </table>
-      <p>RMS và variance chỉ đo cường độ trung bình, nên hai tín hiệu rất khác nhau có thể giống hệt nhau ở hai số này. Hai chuỗi 8 mẫu dưới đây cùng có mean = 0 và variance = 2.5, nhưng B có hai lần "giật" (dấu hiệu quen thuộc của va đập cơ khí hay ổ bi hỏng) còn A rải đều:</p>
-      <table>
-        <thead><tr><th></th><th>Chuỗi</th><th>Variance</th><th>Kurtosis</th></tr></thead>
-        <tbody>
-          <tr><td>A</td><td><code>−2 −1 1 2 −2 −1 1 2</code></td><td>2.5</td><td>1.36</td></tr>
-          <tr><td>B</td><td><code>−3 −1 0 0 0 0 1 3</code></td><td>2.5</td><td>3.28</td></tr>
-        </tbody>
-      </table>
-      <p>Kurtosis là con số duy nhất trong nhóm này tách được hai chuỗi. Mốc tham chiếu theo định nghĩa không trừ 3: sóng sin 1.5, nhiễu Gauss 3, tín hiệu có xung giật cục lớn hơn 3. Cẩn thận khi dùng thư viện: <code>scipy.stats.kurtosis</code> mặc định trả về <i>excess</i> kurtosis, đã trừ 3.</p>
-      <p>Ba mẹo khi cài đặt bằng số nguyên. Khai căn nguyên (cắt xuống) cho RMS, hoặc tránh khai căn bằng cách so variance với bình phương ngưỡng. <code>d⁴</code> dễ tràn <code>int64</code> (d cỡ 3·10⁴ thì d⁴ đã cỡ 10¹⁸), nên co mọi giá trị đi cùng một số bit trước khi luỹ thừa; tỉ số kurtosis không đổi khi co giãn tuyến tính. Và dùng lại tổng d² đã có từ RMS thay vì tính lại.</p>
-      <pre><code data-from="#features-code" data-filename="features.js"></code></pre>
+      <p>RMS và variance chỉ đo cường độ trung bình, nên hai tín hiệu rất khác nhau có thể giống hệt nhau ở hai số này. Kurtosis khác ở chỗ nó luỹ thừa bốn: một mẫu lớn gấp đôi đóng góp gấp 16 lần vào <code>Σd⁴</code> nhưng chỉ gấp 4 lần vào <code>Σd²</code>, nên vài mẫu giật cục đủ kéo kurtosis lên rất cao trong khi RMS gần như đứng yên.</p>
 
-      <h2 id="tan-so">Miền tần số: cửa sổ Hann và FFT</h2>
-      <p>RMS cho biết rung mạnh hay yếu, không cho biết rung nhanh hay chậm. Rung ở 3 Hz và ở 35 Hz có ý nghĩa vật lý khác hẳn dù RMS giống nhau. FFT trả lời câu hỏi còn thiếu.</p>
-      <p>Trực giác của DFT: với mỗi tần số ứng viên, "ướm" khung lên một sóng cos hoặc sin ở đúng tần số đó, nhân từng cặp mẫu rồi cộng dồn. Khớp thì các tích cùng dấu và tổng lớn; không khớp thì dương âm triệt tiêu và tổng gần 0. FFT cho đúng kết quả đó với khoảng <code>N·log₂N</code> phép tính thay vì <code>N²</code> (N = 128: 896 so với 16 384, nhanh hơn 18 lần) bằng cách chia đôi liên tục rồi ghép lại bằng phép "bướm". Mỗi bin ra là một số phức, và công suất là <code>re² + im²</code>.</p>
-      <p>FFT ngầm coi khung là một chu kỳ lặp lại mãi. Nếu tần số thật không rơi đúng một bin (hầu như luôn vậy), đầu và cuối khung không khớp nhau, tạo bước nhảy giả và năng lượng rò sang các bin lân cận. Nhân khung với một cửa sổ giảm dần về 0 ở hai đầu làm giảm rò rỉ, đổi lại đỉnh phổ rộng ra:</p>
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · hai chuỗi 8 mẫu cùng mean = 0 và cùng variance</p>
+        <table class="dense">
+          <thead><tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>Σ</th></tr></thead>
+          <tbody>
+            <tr><td>A: d</td><td>−2</td><td>−1</td><td>1</td><td>2</td><td>−2</td><td>−1</td><td>1</td><td>2</td><td>0</td></tr>
+            <tr><td>d²</td><td>4</td><td>1</td><td>1</td><td>4</td><td>4</td><td>1</td><td>1</td><td>4</td><td><b>20</b></td></tr>
+            <tr><td>d⁴</td><td>16</td><td>1</td><td>1</td><td>16</td><td>16</td><td>1</td><td>1</td><td>16</td><td><b>68</b></td></tr>
+            <tr><td>B: d</td><td>−3</td><td>−1</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td><td>3</td><td>0</td></tr>
+            <tr><td>d²</td><td>9</td><td>1</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td><td>9</td><td><b>20</b></td></tr>
+            <tr><td>d⁴</td><td>81</td><td>1</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td><td>81</td><td><b>164</b></td></tr>
+          </tbody>
+        </table>
+        <p>Cả hai có <code>Σd² = 20</code>, nên variance cùng bằng <code>20/8 = 2.5</code> và RMS cùng bằng 1.58. Kurtosis thì khác: chuỗi A cho <code>8·68 / 20² = 544/400 = <b>1.36</b></code>, chuỗi B cho <code>8·164 / 20² = 1312/400 = <b>3.28</b></code>.</p>
+        <p>B có hai lần "giật" (dấu hiệu quen thuộc của va đập cơ khí hay ổ bi hỏng) còn A rải đều, nhưng variance giống hệt nhau: kurtosis là con số duy nhất trong nhóm này tách được chúng. Mốc tham chiếu cũng tính tay được: với sóng sin, <code>mean(sin²) = 1/2</code> và <code>mean(sin⁴) = 3/8</code>, nên <code>kurtosis = (3/8) / (1/2)² = 1.5</code> và <code>crest = 1 / √(1/2) = 1.41</code>. Nhiễu Gauss có kurtosis 3, tín hiệu có xung giật cục lớn hơn 3.</p>
+      </div>
+
+      <section class="sim" id="sim-feat" aria-label="Mô phỏng đặc trưng miền thời gian: thêm xung giật vào một khung 128 mẫu">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Tín hiệu">
+            <label>Nền
+              <select name="base">
+                <option value="sin" selected>sóng sin</option>
+                <option value="gauss">nhiễu Gauss</option>
+              </select>
+            </label>
+            <label>Số xung <input name="spikes" type="range" min="0" max="6" step="1" value="2"><output data-out="spikes"></output></label>
+            <label>Độ cao xung <input name="height" type="range" min="2" max="12" step="0.5" value="5"><output data-out="height"></output></label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Khung tín hiệu nền và khung sau khi thêm xung"></canvas>
+        <canvas class="h-sm" role="img" aria-label="Phần đóng góp của từng mẫu vào tổng bình phương và tổng luỹ thừa bốn"></canvas>
+        <div class="sim-stats">
+          <span>RMS: <b data-out="rms">–</b></span>
+          <span>Peak: <b data-out="peak">–</b></span>
+          <span>Crest: <b data-out="crest">–</b></span>
+          <span>Kurtosis: <b data-out="kurt">–</b></span>
+        </div>
+        <p class="dsp-status">Đóng góp của các xung: <span data-out="share">–</span>.</p>
+      </section>
+      <p class="try"><b>Thử:</b> với nền sin và 0 xung, kurtosis đúng 1.50 như tính tay; đổi sang nhiễu Gauss thì cỡ 3. Quay về sin, thêm một xung cao 5× RMS: RMS chỉ nhích 13% nhưng kurtosis nhảy từ 1.50 lên 7.0. Với hai xung, RMS tăng 25% còn kurtosis lên 9.7, và hàng cột phía dưới cho thấy lý do: hai mẫu đó chiếm 94% của <code>Σd⁴</code> (cột đỏ) nhưng chỉ 38% của <code>Σd²</code> (cột xám). Kéo số xung lên 6: RMS tăng tới 65% trong khi kurtosis đứng quanh 9.5, vì khi xung không còn hiếm thì chúng không còn là ngoại lệ so với phần còn lại. Kurtosis nhạy nhất với vài xung hiếm.</p>
+
+      <p>Cẩn thận khi dùng thư viện: <code>scipy.stats.kurtosis</code> mặc định trả về <i>excess</i> kurtosis, đã trừ 3, nên sóng sin cho −1.5 chứ không phải 1.5. Bài này dùng định nghĩa không trừ 3.</p>
+      <p>Ba mẹo khi cài đặt bằng số nguyên. Khai căn nguyên (cắt xuống) cho RMS, hoặc tránh khai căn bằng cách so variance với bình phương ngưỡng. <code>d⁴</code> dễ tràn <code>int64</code> (d cỡ 3·10⁴ thì d⁴ đã cỡ 10¹⁸), nên co mọi giá trị đi cùng một số bit trước khi luỹ thừa; tỉ số kurtosis không đổi khi co giãn tuyến tính. Và dùng lại tổng d² đã có từ RMS thay vì tính lại.</p>
+      <pre><code class="language-python" data-from="#features-py" data-filename="features.py"></code></pre>
+
+      <h2 id="tan-so">FFT: ướm từng tần số</h2>
+      <p>RMS cho biết rung mạnh hay yếu, không cho biết rung nhanh hay chậm. Rung ở 3 Hz và ở 35 Hz có ý nghĩa vật lý khác hẳn dù RMS giống nhau. Câu hỏi còn thiếu là "trong khung này có bao nhiêu phần là sóng ở tần số f?", và DFT trả lời bằng cách ướm thử.</p>
+      <p>Với mỗi tần số ứng viên, ta tạo một sóng cos và một sóng sin có đúng <code>k</code> chu kỳ trong N mẫu, nhân từng cặp mẫu của khung với sóng thử rồi cộng dồn. Khớp thì các tích cùng dấu và tổng lớn; không khớp thì dương âm triệt tiêu và tổng gần 0. Dùng cả cos lẫn sin vì sóng thật có pha bất kỳ: phần khớp với cos là phần thực <code>Re</code>, phần khớp với sin là phần ảo <code>Im</code>, và công suất <code>re² + im²</code> không phụ thuộc pha:</p>
+      <p class="eq">X[k] = Σ x[n] · ( cos(2πkn/N) − j·sin(2πkn/N) ),   n = 0 … N−1</p>
+
+      <section class="sim" id="sim-dft" aria-label="Mô phỏng DFT: ướm sóng thử tần số k lên một khung 32 mẫu, Fs = 100 Hz">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Tín hiệu">
+            <label>Tone A <input name="a" type="range" min="1" max="15" step="1" value="3"><output data-out="a"></output></label>
+            <label>Tone B <input name="b" type="range" min="1" max="15" step="1" value="7"><output data-out="b"></output></label>
+            <label>Biên độ tone B <input name="ampb" type="range" min="0" max="1" step="0.05" value="0.5"><output data-out="ampb"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Sóng thử">
+            <label>Tần số thử <input name="k" type="range" min="0" max="16" step="1" value="3"><output data-out="k"></output></label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Khung tín hiệu và sóng cos thử chồng lên nhau"></canvas>
+        <canvas class="h-sm" role="img" aria-label="Tích từng cặp mẫu giữa tín hiệu và sóng thử"></canvas>
+        <canvas class="h-md" role="img" aria-label="Công suất của mọi bin, bin đang thử tô đỏ"></canvas>
+        <div class="sim-stats">
+          <span>Re X[k] = Σ x·cos: <b data-out="re">–</b></span>
+          <span>Im X[k] = −Σ x·sin: <b data-out="im">–</b></span>
+          <span>Công suất re² + im²: <b data-out="pw">–</b></span>
+          <span><b data-out="bin">–</b></span>
+        </div>
+      </section>
+      <p class="try"><b>Thử:</b> kéo "Tần số thử" từ 0 lên 16 và nhìn cột công suất sáng lên đúng ở k = 3 và k = 7, hai tone có trong khung. Ở k = 3 sóng đỏ trùng pha với tone A nên các tích gần như toàn dương, tổng <code>Re = 16</code> (= biên độ 1 × N/2). Ở k = 4 các tích dương và âm bù nhau đúng, tổng bằng 0. Tone B có pha 1 rad, nên ở k = 7 cả hai phần đều khác 0: <code>Re = 4.32</code>, <code>Im = 6.73</code>. Chỉ khi gộp lại, công suất <code>4.32² + 6.73² = 64</code> mới đúng bằng <code>(0.5 · 16)²</code> như với tone B không lệch pha: đó là lý do phải ướm cả cos lẫn sin.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · DFT 4 điểm của <code>x = [1, 2, 3, 4]</code></p>
+        <p>Với N = 4, hệ số xoay là <code>W = e<sup>−j2π/4</sup> = −j</code>, và các luỹ thừa của nó lặp lại sau 4 bước: <code>W⁰ = 1, W¹ = −j, W² = −1, W³ = +j</code>. Theo định nghĩa, <code>X[k] = Σ x[n]·W<sup>kn</sup></code>:</p>
+        <table>
+          <thead><tr><th>k</th><th>Tính</th><th>X[k]</th><th>Công suất re² + im²</th></tr></thead>
+          <tbody>
+            <tr><td>0</td><td>1 + 2 + 3 + 4</td><td>10</td><td>100</td></tr>
+            <tr><td>1</td><td>1·1 + 2·(−j) + 3·(−1) + 4·(+j)</td><td>−2 + 2j</td><td>8</td></tr>
+            <tr><td>2</td><td>1·1 + 2·(−1) + 3·1 + 4·(−1)</td><td>−2</td><td>4</td></tr>
+            <tr><td>3</td><td>1·1 + 2·(+j) + 3·(−1) + 4·(−j)</td><td>−2 − 2j</td><td>8</td></tr>
+          </tbody>
+        </table>
+        <p>Tốn <code>N² = 16</code> phép nhân. FFT chia đôi: ghép mẫu chẵn <code>(x₀, x₂)</code> và mẫu lẻ <code>(x₁, x₃)</code>, rồi ghép lại bằng phép "bướm". Tầng 1 chỉ cộng và trừ: <code>a = x₀ + x₂ = 4</code>, <code>b = x₀ − x₂ = −2</code>, <code>c = x₁ + x₃ = 6</code>, <code>d = x₁ − x₃ = −2</code>. Tầng 2 ghép với hệ số xoay: <code>X₀ = a + c = 10</code>, <code>X₂ = a − c = −2</code>, <code>X₁ = b + W·d = −2 + (−j)(−2) = −2 + 2j</code>, <code>X₃ = b − W·d = −2 − 2j</code>. Ra đúng bốn kết quả trên với số phép tính giảm từ <code>N²</code> xuống cỡ <code>N·log₂N</code>.</p>
+        <p>Để ý <code>X[3] = −2 − 2j</code> là liên hợp phức của <code>X[1] = −2 + 2j</code>: với tín hiệu thực, nửa sau của phổ chỉ lặp lại nửa đầu, nên chỉ <code>N/2 + 1</code> bin đầu (tới Nyquist) là độc lập. Mô phỏng ở trên vẽ đúng 17 bin cho N = 32.</p>
+      </div>
+
+      <p>Bin <code>k</code> ứng với tần số <code>f = k·Fs/N</code>: ở mô phỏng (N = 32, Fs = 100 Hz) mỗi bin cách nhau 3.125 Hz. Với N = 128 và Fs = 100 Hz thì <code>Δf = 0.78125 Hz</code>, và FFT cho đúng kết quả của DFT với khoảng <code>N·log₂N</code> phép tính thay vì <code>N²</code> (N = 128: 896 so với 16 384, nhanh hơn 18 lần). Mỗi bin ra là một số phức, và công suất là <code>re² + im²</code>.</p>
+      <p>Bản số nguyên thường dùng bảng twiddle Q1.15 tính sẵn, ba vòng lặp lồng nhau thay cho đệ quy (công cụ HLS cần số vòng biết trước), và chia đôi có làm tròn sau mỗi tầng để không tràn: <code>log₂N</code> tầng co tổng cộng 1/N.</p>
+
+      <h2 id="ro-ri">Rò rỉ phổ và cửa sổ Hann</h2>
+      <p>Mô phỏng DFT ở trên dùng các tone có số chu kỳ nguyên trong khung, nên phổ sạch: mỗi tone sáng đúng một bin. Thực tế hầu như không bao giờ như vậy. FFT ngầm coi khung là một chu kỳ lặp lại mãi mãi; nếu tần số thật không rơi đúng một bin thì đầu và cuối khung không khớp nhau, tạo bước nhảy giả ở chỗ nối và năng lượng rò sang các bin lân cận. Nhân khung với một cửa sổ giảm dần về 0 ở hai đầu làm chỗ nối êm lại, đổi lại đỉnh phổ rộng ra.</p>
+
+      <section class="sim" id="sim-leak" aria-label="Mô phỏng rò rỉ phổ: một tone nhân cửa sổ rồi FFT, N = 128, Fs = 100 Hz">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Tone và cửa sổ">
+            <label>Vị trí tone <input name="bin" type="range" min="8" max="30" step="0.05" value="16.5"><output data-out="bin"></output></label>
+            <label>Hàm cửa sổ
+              <select name="win">
+                <option value="rect">Chữ nhật</option>
+                <option value="hann" selected>Hann</option>
+                <option value="hamming">Hamming</option>
+                <option value="blackman">Blackman</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <canvas class="h-sm" role="img" aria-label="Khung tín hiệu trước và sau khi nhân cửa sổ"></canvas>
+        <canvas class="h-lg" role="img" aria-label="Phổ công suất theo dB, các bin từ 0 đến 40"></canvas>
+        <div class="legend">
+          <span style="--c: var(--accent)">bin trội</span>
+          <span style="--c: var(--indigo)">các bin khác</span>
+          <span style="--c: var(--faint)">phổ của cửa sổ chữ nhật (đối chiếu)</span>
+        </div>
+        <div class="sim-stats">
+          <span>Đỉnh: <b data-out="peak">–</b></span>
+          <span>Tần số ước lượng: <b data-out="est">–</b></span>
+          <span>Mức ở cách đỉnh 4 bin: <b data-out="leak">–</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> đặt vị trí 16 đúng bin với cửa sổ chữ nhật: chỉ một cột sáng, mọi bin khác chìm sâu. Kéo sang 16.5 (giữa hai bin): chữ nhật rò ra cả phổ, mức ở cách đỉnh 4 bin khoảng −18 dB. Đổi sang Hann: chân đỉnh co lại còn khoảng −40 dB, đổi lại đỉnh rộng hơn. Blackman còn sạch hơn (cỡ −57 dB) nhưng đỉnh rộng nhất. Ô "Tần số ước lượng" vẫn gần đúng tone dù tone nằm giữa hai bin: xem nội suy parabol bên dưới.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · cửa sổ Hann, đỉnh phổ và nội suy</p>
+        <p>Cửa sổ Hann <code>w[i] = 0.5 − 0.5·cos(2πi/N)</code>. Với N = 8: <code>w = [0, 0.146, 0.5, 0.854, 1, 0.854, 0.5, 0.146]</code>. Hai đầu khung bị nhân với 0 và 0.146, nên bước nhảy ở chỗ nối co về gần như không. Cái giá: trung bình của cửa sổ là 0.5, nên sin biên độ A đúng bin chỉ còn <code>|X| = A·N/4</code> thay vì <code>A·N/2</code>. Với A = 1, N = 128: Hann cho <code>|X| = 32</code>, công suất <code>1024</code>; chữ nhật cho <code>64</code> và <code>4096</code>. Vì vậy ngưỡng đặt trên công suất phổ phụ thuộc vào cửa sổ đã dùng.</p>
+        <p>Đo từ <code>fft.py</code> với N = 128 (mức so với đỉnh, tone ở bin 16.5, lấy bên lớn hơn của hai bên đỉnh):</p>
+        <table>
+          <thead><tr><th>Cửa sổ</th><th>Tone đúng bin 16: các bin sáng</th><th>Cách đỉnh 4 bin</th><th>Cách đỉnh 8 bin</th></tr></thead>
+          <tbody>
+            <tr><td>Chữ nhật</td><td>1 bin</td><td>−17.8 dB</td><td>−23.2 dB</td></tr>
+            <tr><td>Hann</td><td>3 bin (0, −6, −6 dB)</td><td>−40.4 dB</td><td>−60.8 dB</td></tr>
+            <tr><td>Hamming</td><td>3 bin (0, −7.4, −7.4 dB)</td><td>−39.7 dB</td><td>−42.4 dB</td></tr>
+            <tr><td>Blackman</td><td>5 bin (0, −4.5, −4.5, −20.4, −20.4 dB)</td><td>−57.1 dB</td><td>−69.4 dB</td></tr>
+          </tbody>
+        </table>
+        <p>Hamming có sidelobe đầu thấp hơn Hann nhưng không giảm tiếp (−42 dB ở cách 8 bin, trong khi Hann đã xuống −61 dB); với rung động nhiều tần số, Hann thường là lựa chọn mặc định.</p>
+        <p><b>Nội suy parabol.</b> Tone ở bin 16.25 với Hann cho công suất ba bin quanh đỉnh <code>P[15] = 104.9</code>, <code>P[16] = 944.4</code>, <code>P[17] = 481.8</code>. Lấy log tự nhiên: <code>a = 4.653, b = 6.851, c = 6.178</code>. Độ lệch so với bin đỉnh là <code>δ = 0.5·(a − c) / (a − 2b + c) = 0.5·(−1.525) / (−2.871) = 0.266</code> bin, nên <code>f = (16 + 0.266) · 100/128 = 12.707 Hz</code>. Tần số thật là 16.25 bin = 12.695 Hz: sai 0.012 Hz, trong khi độ phân giải Δf là 0.78 Hz.</p>
+      </div>
+
       <figure class="wide">
         <table>
           <thead><tr><th>Cửa sổ</th><th>Thuỳ chính (bin)</th><th>Sidelobe cao nhất</th><th>Dùng khi</th></tr></thead>
@@ -322,13 +729,55 @@
         </table>
       </figure>
       <p>Hann và Hamming cùng họ cosine nhưng làm hai việc ở hai thời điểm khác nhau: Hamming dùng một lần lúc thiết kế FIR, còn cửa sổ phân tích chạy ở mỗi khung. Dạng cũng khác chút: phân tích phổ dùng dạng tuần hoàn (chia cho <code>N</code>), thiết kế FIR dùng dạng đối xứng (chia cho <code>L−1</code>). Và chỉ nhánh FFT được nhân cửa sổ: RMS và kurtosis dùng khung detrend nguyên vẹn, nhân Hann vào đó chỉ làm biên độ co lại mà không có lý do vật lý.</p>
-      <p>Bin <code>k</code> ứng với tần số <code>f = k·Fs/N</code>, và với tín hiệu thực chỉ <code>N/2 + 1</code> bin đầu là độc lập (tới Nyquist). Không cần tăng N để biết đỉnh chính xác hơn Δf: nội suy parabol qua bin đỉnh và hai bin kề cho sai số nhỏ hơn nhiều Δf, và mô phỏng hiển thị f trội theo cách đó. Khi tìm đỉnh nên bỏ bin 0 và giới hạn trong dải thực sự cần quan sát.</p>
-      <p>Bản số nguyên thường dùng bảng twiddle Q1.15 tính sẵn, ba vòng lặp lồng nhau thay cho đệ quy (công cụ HLS cần số vòng biết trước), và chia đôi có làm tròn sau mỗi tầng để không tràn: <code>log₂N</code> tầng co tổng cộng 1/N.</p>
-      <pre><code data-from="#fft-code" data-filename="fft.js"></code></pre>
+      <p>Không cần tăng N để biết đỉnh chính xác hơn Δf: nội suy parabol qua bin đỉnh và hai bin kề cho sai số nhỏ hơn nhiều Δf, và mô phỏng hiển thị f trội theo cách đó. Khi tìm đỉnh nên bỏ bin 0 và giới hạn trong dải thực sự cần quan sát.</p>
+      <pre><code class="language-python" data-from="#fft-py" data-filename="fft.py"></code></pre>
 
       <h2 id="band-energy">Band energy: phổ thu gọn</h2>
       <p>Một đỉnh trội chỉ là một con số. Lỗi cơ khí phức hợp rải năng lượng trên nhiều tần số, nên pipeline thường cộng công suất theo vài dải cố định: <code>B<sub>i</sub> = Σ P[k]</code> với k thuộc dải i. Bốn đến tám dải cho bộ phân loại một hình dạng phổ thô nhưng có kích thước cố định, không phụ thuộc N.</p>
-      <p>Mép dải nên theo ý nghĩa vật lý (tần số quay, các hài của nó, dải cộng hưởng đã biết) thay vì chia đều như trong mô phỏng. Bỏ bin 0 và mọi thứ ngoài dải cần quan sát để nhiễu ngoài dải không lọt vào kết quả. Nên giữ cả dạng tuyệt đối (cho biết mức độ nghiêm trọng) lẫn tỉ lệ <code>B<sub>i</sub> / ΣB</code> (cho biết hình dạng, không phụ thuộc biên độ).</p>
+
+      <section class="sim" id="sim-band" aria-label="Mô phỏng band energy: kéo mép dải và biên độ, N = 128, Fs = 100 Hz">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Tín hiệu">
+            <label>Tone 1 <input name="f1" type="range" min="2" max="48" step="0.5" value="6.5"><output data-out="f1"></output></label>
+            <label>Tone 2 <input name="f2" type="range" min="2" max="48" step="0.5" value="30"><output data-out="f2"></output></label>
+            <label>Biên độ tone 2 <input name="a2" type="range" min="0" max="1" step="0.05" value="0.6"><output data-out="a2"></output></label>
+            <label>Biên độ chung <input name="gain" type="range" min="0.5" max="4" step="0.1" value="1"><output data-out="gain"></output></label>
+            <label>Nhiễu <input name="noise" type="range" min="0" max="0.5" step="0.01" value="0.1"><output data-out="noise"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Mép dải">
+            <label>Mép 1 <input name="e1" type="range" min="5" max="20" step="0.5" value="12.5"><output data-out="e1"></output></label>
+            <label>Mép 2 <input name="e2" type="range" min="15" max="35" step="0.5" value="25"><output data-out="e2"></output></label>
+            <label>Mép 3 <input name="e3" type="range" min="30" max="45" step="0.5" value="37.5"><output data-out="e3"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Phổ công suất theo dB chia thành bốn dải bởi ba mép"></canvas>
+        <canvas class="h-sm" role="img" aria-label="Năng lượng bốn dải: tỉ lệ phần trăm và giá trị tuyệt đối"></canvas>
+        <div class="sim-stats">
+          <span>Tổng B1 + B2 + B3 + B4: <b data-out="total">–</b></span>
+        </div>
+      </section>
+      <p class="try"><b>Thử:</b> kéo "Biên độ chung" từ 1 lên 2: số tuyệt đối tăng 4 lần (công suất tỉ lệ với bình phương biên độ) nhưng tỉ lệ phần trăm không đổi, vì thế phải giữ cả hai dạng. Kéo Tone 2 qua mép 3 (37.5 Hz): năng lượng nhảy từ B3 sang B4 dù tần số chỉ đổi vài Hz, nên mép dải nên đặt ở chỗ không có đỉnh quan trọng. Đưa Nhiễu lên 0.5 và nhìn sàn nhiễu cộng vào từng dải.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · N = 16, Fs = 100 Hz, bốn dải chia đều</p>
+        <p>Mỗi bin rộng <code>Fs/N = 6.25 Hz</code>, mép dải ở 12.5, 25, 37.5 Hz. Bin nằm đúng mép thuộc dải trên (điều kiện <code>f ≥ mép</code> trong <code>band_energy</code>), và bin 0 (DC) không tính:</p>
+        <table>
+          <thead><tr><th>Bin k</th><th>f (Hz)</th><th>Dải</th><th>P[k]</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>6.25</td><td>B1</td><td>80</td></tr>
+            <tr><td>2</td><td>12.5</td><td>B2</td><td>120</td></tr>
+            <tr><td>3</td><td>18.75</td><td>B2</td><td>40</td></tr>
+            <tr><td>4</td><td>25</td><td>B3</td><td>10</td></tr>
+            <tr><td>5</td><td>31.25</td><td>B3</td><td>6</td></tr>
+            <tr><td>6</td><td>37.5</td><td>B4</td><td>4</td></tr>
+            <tr><td>7</td><td>43.75</td><td>B4</td><td>2</td></tr>
+            <tr><td>8</td><td>50</td><td>B4</td><td>1</td></tr>
+          </tbody>
+        </table>
+        <p><code>B1 = 80</code>, <code>B2 = 120 + 40 = 160</code>, <code>B3 = 10 + 6 = 16</code>, <code>B4 = 4 + 2 + 1 = 7</code>, tổng 263, tỉ lệ <code>30.4% / 60.8% / 6.1% / 2.7%</code>. Nếu rung mạnh gấp đôi (biên độ ×2, công suất ×4) thì <code>B = 320 / 640 / 64 / 28</code>, tổng 1052, nhưng tỉ lệ vẫn <code>30.4% / 60.8% / 6.1% / 2.7%</code>.</p>
+      </div>
+
+      <p>Mép dải nên theo ý nghĩa vật lý (tần số quay, các hài của nó, dải cộng hưởng đã biết) thay vì chia đều như trong mô phỏng đầu bài. Bỏ bin 0 và mọi thứ ngoài dải cần quan sát để nhiễu ngoài dải không lọt vào kết quả. Nên giữ cả dạng tuyệt đối (cho biết mức độ nghiêm trọng) lẫn tỉ lệ <code>B<sub>i</sub> / ΣB</code> (cho biết hình dạng, không phụ thuộc biên độ).</p>
 
       <h2 id="vector-dac-trung">Đóng gói thành vector đặc trưng</h2>
       <p>Cuối pipeline là một cấu trúc có bố cục cố định. Tên trường ghi luôn Q-format để người đọc firmware khỏi phải đoán, và kích thước được kiểm tra ngay lúc biên dịch:</p>
@@ -345,9 +794,27 @@
 } FeatureFrame;                   /* 12 x 4 = 48 byte */
 
 _Static_assert(sizeof(FeatureFrame) == 48, "bố cục phải cố định");</code></pre>
+
+      <div class="calc wide">
+        <p class="calc-title">Ví dụ tính tay · đóng gói khung mặc định của mô phỏng đầu bài</p>
+        <p>Giả sử giá trị 1.0 trong mô phỏng ứng với 1000 count của ADC. Khung mặc định cho ra các giá trị thật ở cột hai; mỗi trường nhân với 2<sup>F</sup> của Q-format ghi trong tên rồi làm tròn:</p>
+        <table>
+          <thead><tr><th>Trường</th><th>Giá trị thật</th><th>× 2<sup>F</sup></th><th>Số nguyên</th><th>Hex</th><th>Đọc lại</th></tr></thead>
+          <tbody>
+            <tr><td><code>rms_q24_8</code></td><td>722.3594</td><td>× 256</td><td>184 924</td><td><code>0x0002D25C</code></td><td>722.3594</td></tr>
+            <tr><td><code>peak_q24_8</code></td><td>1175.1719</td><td>× 256</td><td>300 844</td><td><code>0x0004972C</code></td><td>1175.1719</td></tr>
+            <tr><td><code>variance_q32_0</code></td><td>521 803.10</td><td>× 1</td><td>521 803</td><td><code>0x0007F64B</code></td><td>521 803</td></tr>
+            <tr><td><code>kurtosis_q16_16</code></td><td>1.536679</td><td>× 65536</td><td>100 708</td><td><code>0x00018964</code></td><td>1.536682</td></tr>
+            <tr><td><code>dom_freq_q16_16</code></td><td>6.392937</td><td>× 65536</td><td>418 968</td><td><code>0x00066498</code></td><td>6.392944</td></tr>
+          </tbody>
+        </table>
+        <p>Sai số đọc lại nhỏ hơn nửa đơn vị cuối của từng trường (1/512 cho Q24.8, 1/131072 cho Q16.16). Chọn Q-format cho từng trường là chọn nơi đặt dấu phẩy: RMS cần một ít phần lẻ nhưng phạm vi rộng nên Q24.8; kurtosis nhỏ mà cần độ chính xác nên Q16.16.</p>
+        <p>Cũng từ bảng này thấy vì sao phải chuẩn hoá trước khi đưa vào mạng: <code>variance_q32_0 = 521 803</code> còn kurtosis thật chỉ <code>1.54</code>, lệch năm bậc độ lớn. Chuẩn hoá z-score <code>(x − μ) / σ</code> với μ và σ tính trên tập huấn luyện đưa chúng về cùng thang. Giả sử variance có μ = 600 000, σ = 150 000 và kurtosis có μ = 2.0, σ = 0.8, thì <code>z<sub>var</sub> = (521 803 − 600 000) / 150 000 = −0.52</code> và <code>z<sub>kurt</sub> = (1.54 − 2.0) / 0.8 = −0.58</code>: hai trường giờ ngang nhau, không trường nào át neuron đầu tiên.</p>
+      </div>
+
       <p>Mười hai số nguyên 32 bit thay cho N mẫu: băng thông và tải CPU phía sau giảm mạnh. Từ đây có hai hướng ra quyết định. Luật ngưỡng (ví dụ RMS vượt mức cho phép) rẻ, dễ giải thích và nên luôn có làm lớp dự phòng. Mô hình ML nhỏ (MLP vài trăm tham số) nhận các trường này làm đầu vào, với hai lưu ý:</p>
       <ul>
-        <li><b>Chuẩn hoá z-score</b> (<code>(x − μ) / σ</code>) trước khi vào mạng. Các trường lệch thang đo hàng trăm lần (RMS Q24.8 có thể cỡ hàng trăm, kurtosis Q16.16 cỡ hàng trăm nghìn); không chuẩn hoá thì trường lớn nhất chi phối neuron đầu tiên dù chẳng có lý do gì để nó quan trọng hơn.</li>
+        <li><b>Chuẩn hoá z-score</b> trước khi vào mạng, như ví dụ ở trên. Không chuẩn hoá thì trường có thang lớn nhất chi phối neuron đầu tiên dù chẳng có lý do gì để nó quan trọng hơn.</li>
         <li><b>Chia train/test theo phiên đo</b>, không theo khung. Hai khung liền nhau chia sẻ 50% mẫu: chia ngẫu nhiên theo khung thì hàng xóm của khung test nằm trong tập train, và độ chính xác đo được cao giả tạo.</li>
       </ul>
 
@@ -356,9 +823,61 @@ _Static_assert(sizeof(FeatureFrame) == 48, "bố cục phải cố định");</c
       <p>Kiểm chứng theo ba lớp, trước khi chạm tới phần cứng:</p>
       <ol>
         <li><b>Mô hình tham chiếu dấu phẩy động</b> (numpy, scipy) định nghĩa đáp án đúng về mặt toán.</li>
-        <li><b>Mô hình bit-exact</b> của bản số nguyên (C++ hoặc Python, cùng thứ tự phép toán, cùng kiểu dữ liệu, cùng cách làm tròn). Chạy nó trên một tín hiệu tổng hợp có đáp án biết trước (ví dụ tổng vài sóng sin: đỉnh phổ phải nằm ở tần số đã cài) để sinh <i>golden vector</i>, và so với mô hình float để biết sai số lượng tử hoá có chấp nhận được không.</li>
+        <li><b>Mô hình bit-exact</b> của bản số nguyên (C++ hoặc Python, cùng thứ tự phép toán, cùng kiểu dữ liệu, cùng cách làm tròn). Chạy nó trên một tín hiệu tổng hợp có đáp án biết trước để sinh <i>golden vector</i>, và so với mô hình float để biết sai số lượng tử hoá có chấp nhận được không.</li>
         <li><b>Thiết bị đích</b> (kết quả mô phỏng HLS, firmware chạy trên board) phải khớp golden từng bit, tự động trong CI.</li>
       </ol>
+      <p>Mô phỏng dưới đây làm đúng lớp 1 và 2 cho bộ lọc FIR 16 tap: cùng một chuỗi số nguyên đi vào bản dấu phẩy động và bản Q1.15, và biểu đồ vẽ sai số giữa hai bản theo đơn vị LSB của đầu ra. Bản "cộng dồn rồi làm tròn một lần" chính là mô hình golden; hai cách còn lại là hai kiểu cài đặt sai hay gặp, và ô "Khác golden" đếm số mẫu mà firmware sẽ lệch khi so từng bit.</p>
+
+      <section class="sim" id="sim-verify" aria-label="Mô phỏng kiểm chứng: FIR 16 tap bằng số nguyên so với dấu phẩy động, 256 mẫu">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Cài đặt">
+            <label>Cách cộng dồn
+              <select name="mode">
+                <option value="cut" selected>cắt từng tích rồi cộng</option>
+                <option value="round">làm tròn từng tích rồi cộng</option>
+                <option value="once">cộng dồn, làm tròn một lần (golden)</option>
+              </select>
+            </label>
+            <label>Bit phân số của hệ số
+              <select name="bits">
+                <option value="15" selected>Q1.15</option>
+                <option value="12">Q1.12</option>
+                <option value="10">Q1.10</option>
+                <option value="8">Q1.8</option>
+              </select>
+            </label>
+            <label>Biên độ tín hiệu <input name="amp" type="range" min="0.1" max="0.9" step="0.05" value="0.5"><output data-out="amp"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Sai số theo thời gian giữa bản số nguyên và bản dấu phẩy động"></canvas>
+        <div class="legend">
+          <span style="--c: var(--indigo)">sai số từng mẫu</span>
+          <span style="--c: var(--accent)">sai số trung bình (bias)</span>
+        </div>
+        <div class="sim-stats">
+          <span>Sai số lớn nhất: <b data-out="maxe">–</b></span>
+          <span>Bias: <b data-out="bias">–</b></span>
+          <span>Khác golden: <b data-out="diff">–</b></span>
+        </div>
+      </section>
+      <p class="try"><b>Thử:</b> với "cắt từng tích", đường đỏ nằm quanh −6 LSB. Con số tối đa trong ví dụ tính tay ở phần Q-format là 16 × 0.5 = 8; ở đây là 6 vì bộ lọc này có 4 tap đúng bằng 0 (các điểm không của hàm sinc, <code>hq = 0</code>), chỉ 12 tap còn lại gây lệch, 12 × 0.5 = 6. Đổi sang "làm tròn từng tích": bias về gần 0 nhưng vẫn khác golden ở 148 trong 256 mẫu, vì nó làm tròn 16 lần thay vì một lần. Chọn golden: sai số chỉ còn tối đa cỡ 1 LSB và khác golden bằng 0 theo định nghĩa. Giảm bit phân số xuống Q1.8: sai số lên hàng chục LSB dù làm tròn đúng cách, vì lúc này sai số lượng tử hoá hệ số lấn át mọi chuyện làm tròn.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · tín hiệu tổng hợp có đáp án biết trước</p>
+        <p>Lấy <code>x[n] = sin(2π · 12.5 · n / 100)</code>, <code>n = 0 … 127</code>, tức biên độ A = 1, N = 128, Fs = 100 Hz. Đổi sang bin: <code>12.5 / (100/128) = 16.0</code>, đúng một số nguyên, nên khung chứa đúng 16 chu kỳ trọn vẹn. Đáp án tính được trên giấy, không cần chạy gì:</p>
+        <table>
+          <thead><tr><th>Đặc trưng</th><th>Đáp án</th><th>Lý do</th></tr></thead>
+          <tbody>
+            <tr><td>RMS</td><td>0.7071</td><td>A/√2</td></tr>
+            <tr><td>Peak, Crest</td><td>1, 1.4142</td><td>đỉnh của sin là A; Peak/RMS = √2</td></tr>
+            <tr><td>Kurtosis</td><td>1.5</td><td>sóng sin (ví dụ tính tay ở phần đặc trưng)</td></tr>
+            <tr><td>Bin trội, f trội</td><td>16, 12.5 Hz</td><td>vì tone đúng bin; hai bin kề bằng nhau nên nội suy cho δ = 0</td></tr>
+            <tr><td>Công suất đỉnh (Hann)</td><td>(A·N/4)² = 32² = 1024</td><td>Hann làm biên độ đỉnh co còn A·N/4</td></tr>
+          </tbody>
+        </table>
+        <p>Chạy <code>time_features</code> và <code>power_spectrum</code> ở cuối bài trên chuỗi này ra đúng các số trên. Khi thiết bị ra khác, con số cho biết sai ở đâu: công suất đỉnh 4096 nghĩa là quên nhân cửa sổ Hann (chữ nhật cho <code>64² = 4096</code>); 256 hay 2048 nghĩa là một bước dịch bit bị lệch (sai theo luỹ thừa của 2); đỉnh ở bin 15 hoặc 17 nghĩa là Fs thực khác Fs giả định.</p>
+      </div>
+
       <p>Dùng tín hiệu tổng hợp thay vì dữ liệu ngẫu nhiên vì nó cho biết "đúng" là gì: lệch một bit hay sai một Q-format đều lộ ngay, còn với dữ liệu thật bạn chỉ thấy kết quả "trông cũng hợp lý".</p>
 
       <h2 id="loi">Những lỗi hay gặp</h2>
@@ -379,18 +898,34 @@ _Static_assert(sizeof(FeatureFrame) == 48, "bố cục phải cố định");</c
         </table>
       </figure>
 
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · hai lỗi có thể đo bằng con số</p>
+        <p><b>Fs thực khác Fs giả định.</b> Xung nhịp lệch khiến ADC thật sự lấy mẫu ở 95 Hz trong khi code giả định 100 Hz. Một tone 10 Hz thật có <code>10/95 = 0.1053</code> chu kỳ mỗi mẫu; code quy ra tần số bằng <code>0.1053 × 100 = 10.53 Hz</code>. Mọi đỉnh phổ lệch cùng tỉ lệ <code>100/95 = 1.053</code> (5%), nên rất dễ nhầm với sai số vật lý của máy.</p>
+        <p><b>Nhầm định nghĩa kurtosis.</b> Với sóng sin, định nghĩa trong bài cho 1.5, còn <code>scipy.stats.kurtosis</code> cho <code>1.5 − 3 = −1.5</code>. Ngưỡng "kurtosis &gt; 4" theo định nghĩa này phải viết thành "&gt; 1" nếu so với scipy. Lệch đúng 3 là dấu hiệu nhận ra lỗi.</p>
+      </div>
+
       <h2>File code của bài</h2>
+      <p>Bốn file Python chỉ dùng thư viện chuẩn: bỏ chung vào một thư mục rồi chạy <code>python demo.py</code>. Kết quả phải trùng các số mặc định của mô phỏng ở đầu bài:</p>
+<pre><code class="language-text">DC      3.01
+RMS     0.722   Peak 1.18   Crest 1.63   Kurtosis 1.54
+f trội  6.39 Hz (bin 8)
+Dải     99% / 1% / 0% / 0%</code></pre>
+      <p>Trình duyệt không chạy được Python, nên mọi mô phỏng trong bài dùng bản JavaScript tương đương của cùng các hàm. Hai bản đã được đối chiếu trên 60 bộ dữ liệu ngẫu nhiên (đủ bốn hàm cửa sổ, N = 64, 128, 256, số tap từ 4 đến 32, cả hai cửa sổ thiết kế Hamming và chữ nhật, cả <code>detrend_linear</code>): sai khác tương đối lớn nhất cỡ 10<sup>-13</sup>. <code>fft.py</code> còn được đối chiếu với <code>numpy.fft</code>, sai khác tuyệt đối lớn nhất cũng cỡ 10<sup>-13</sup>, nên số trong mô phỏng cũng là số Python tính ra.</p>
       <ul class="code-links">
-        <li><a data-from="#fixed-code" download="fixed_point.h">fixed_point.h <small>số học Q1.15, FIR số nguyên, căn nguyên</small></a></li>
-        <li><a data-from="#fir-code" download="fir.js">fir.js <small>thiết kế và chạy FIR, đáp ứng tần số</small></a></li>
-        <li><a data-from="#features-code" download="features.js">features.js <small>detrend, RMS, peak, kurtosis</small></a></li>
-        <li><a data-from="#fft-code" download="fft.js">fft.js <small>cửa sổ, FFT, tần số trội, band energy</small></a></li>
-        <li><a data-from="#sim-code" download="sim.js">sim.js <small>trình mô phỏng ở đầu bài</small></a></li>
+        <li><a data-from="#fixed-code" download="fixed_point.h">fixed_point.h <small>số học Q1.15, FIR số nguyên, căn nguyên (C)</small></a></li>
+        <li><a data-from="#fir-py" download="fir.py">fir.py <small>thiết kế và chạy FIR, đáp ứng tần số</small></a></li>
+        <li><a data-from="#features-py" download="features.py">features.py <small>detrend, RMS, peak, kurtosis</small></a></li>
+        <li><a data-from="#fft-py" download="fft.py">fft.py <small>cửa sổ, FFT, tần số trội, band energy</small></a></li>
+        <li><a data-from="#demo-py" download="demo.py">demo.py <small>chạy cả pipeline trên một khung</small></a></li>
       </ul>
     </article>
   </main>
 
-  <!-- Code của bài: chạy thật ở đây, đồng thời là đoạn được hiển thị và tải về trong bài. -->
+  <!-- Code của bài: các file Python bên dưới chỉ để hiển thị và tải về (type="text/plain"), đó là bản gốc.
+       Mô phỏng ở đầu bài và các mô phỏng nhỏ ở từng phần chạy bản JavaScript tương đương (ba khối script kế tiếp,
+       DSP.*), vì trình duyệt không chạy Python. Sửa thuật toán thì sửa cả hai nơi. Kiểm tra nhanh: chạy demo.py,
+       nó phải ra đúng các số mặc định của mô phỏng (RMS 0.722, f trội 6.39 Hz, dải 99/1/0/0).
+       Các mô phỏng nhỏ dùng chung khung Viz (khối script sau mô phỏng đầu bài), mỗi cái một khối script riêng. -->
   <script type="text/plain" id="fixed-code">
 /* Số học điểm cố định Q1.15 cho DSP trên MCU hoặc FPGA.
  * Giá trị thật = raw / 2^15, nên 16384 là 0.5 và 32767 là gần 1.0.
@@ -428,12 +963,248 @@ uint32_t isqrt_u64(uint64_t v) {
     return (uint32_t)res;
 }
   </script>
-  <script id="fir-code">
+  <script type="text/plain" id="fir-py">
+"""Thiết kế và chạy bộ lọc FIR thông thấp, chỉ dùng thư viện chuẩn.
+
+Viết bằng dấu phẩy động cho dễ đọc; bản số nguyên làm đúng các phép này
+bằng fir_q15() trong fixed_point.h. Tương đương trong scipy:
+design_lowpass(taps, fc, fs) ~ scipy.signal.firwin(taps, fc, fs=fs)
+"""
+import math
+
+
+def design_lowpass(taps, fc, fs, window="hamming"):
+    """Windowed-sinc, thiết kế offline. fc là điểm -6 dB, tính bằng Hz.
+
+    window="hamming" là mặc định; window="rect" là cắt cụt thô, để thấy gợn Gibbs.
+    """
+    f = fc / fs                      # chu kỳ trên mỗi mẫu
+    mid = (taps - 1) / 2             # tâm đối xứng (là x.5 khi số tap chẵn)
+    h = []
+    for n in range(taps):
+        x = n - mid
+        sinc = 1.0 if x == 0 else math.sin(2 * math.pi * f * x) / (2 * math.pi * f * x)
+        w = 0.54 - 0.46 * math.cos(2 * math.pi * n / (taps - 1)) if window == "hamming" else 1.0
+        h.append(2 * f * sinc * w)
+    total = sum(h)
+    return [v / total for v in h]    # chuẩn hoá: độ lợi DC đúng bằng 1
+
+
+def fir_valid(h, x):
+    """y[n] = sum(h[k] * x[n-k]). Chỉ trả về những mẫu có đủ lịch sử: len(x) - len(h) + 1 mẫu."""
+    taps = len(h)
+    return [sum(h[k] * x[n - k] for k in range(taps)) for n in range(taps - 1, len(x))]
+
+
+def gain_sq(h, f, fs):
+    """|H(f)|^2 tại tần số f (Hz): bộ lọc làm yếu công suất ở f đi bao nhiêu lần."""
+    re = im = 0.0
+    for k, hk in enumerate(h):
+        angle = -2 * math.pi * f * k / fs
+        re += hk * math.cos(angle)
+        im += hk * math.sin(angle)
+    return re * re + im * im
+  </script>
+  <script type="text/plain" id="features-py">
+"""Đặc trưng miền thời gian. Đầu vào là một khung mẫu đã lọc."""
+
+
+def mean(x):
+    return sum(x) / len(x)
+
+
+def detrend(x):
+    """Trừ trung bình của chính khung."""
+    m = mean(x)
+    return [v - m for v in x]
+
+
+def detrend_linear(x):
+    """Trừ đường thẳng khớp nhất theo bình phương tối thiểu: bỏ cả DC lẫn độ dốc (baseline trôi)."""
+    n = len(x)
+    mid = (n - 1) / 2
+    m = mean(x)
+    slope = sum((i - mid) * (v - m) for i, v in enumerate(x)) / sum((i - mid) ** 2 for i in range(n))
+    return [v - (m + slope * (i - mid)) for i, v in enumerate(x)]
+
+
+def time_features(x):
+    """x phải là khung đã detrend; khi đó variance = rms**2."""
+    n = len(x)
+    sum2 = sum4 = peak = 0.0
+    for v in x:
+        v2 = v * v
+        sum2 += v2                   # dùng lại cho RMS, variance và kurtosis
+        sum4 += v2 * v2
+        peak = max(peak, abs(v))
+    variance = sum2 / n
+    rms = variance ** 0.5
+    return {
+        "rms": rms,
+        "peak": peak,
+        "variance": variance,
+        "crest": peak / rms if rms else 0.0,
+        # không trừ 3: sóng sin = 1.5, nhiễu Gauss = 3 (scipy.stats.kurtosis mặc định trừ 3)
+        "kurtosis": n * sum4 / (sum2 * sum2) if sum2 else 0.0,
+    }
+  </script>
+  <script type="text/plain" id="fft-py">
+"""Cửa sổ, FFT radix-2 và các đặc trưng miền tần số, chỉ dùng thư viện chuẩn.
+
+Trong thực tế bạn sẽ gọi numpy.fft.rfft; bản này viết tay để thấy từng bước.
+"""
+import math
+
+TAU = 2 * math.pi
+
+WINDOWS = {
+    "rect": lambda i, n: 1.0,
+    "hann": lambda i, n: 0.5 - 0.5 * math.cos(TAU * i / n),
+    "hamming": lambda i, n: 0.54 - 0.46 * math.cos(TAU * i / n),
+    "blackman": lambda i, n: 0.42 - 0.5 * math.cos(TAU * i / n) + 0.08 * math.cos(2 * TAU * i / n),
+}
+
+
+def make_window(kind, n):
+    """Dạng tuần hoàn (chia cho n) dành cho phân tích phổ."""
+    return [WINDOWS[kind](i, n) for i in range(n)]
+
+
+def fft(re, im):
+    """FFT tại chỗ, len(re) là luỹ thừa của 2.
+
+    Hai việc: xếp lại thứ tự (bit-reversal) để làm tại chỗ, rồi ghép từng tầng
+    bằng phép bướm. Hệ số xoay (twiddle) e^(-j*2*pi/size) được nhân dồn.
+    """
+    n = len(re)
+    j = 0
+    for i in range(1, n):
+        bit = n >> 1
+        while j & bit:
+            j ^= bit
+            bit >>= 1
+        j ^= bit
+        if i < j:
+            re[i], re[j] = re[j], re[i]
+            im[i], im[j] = im[j], im[i]
+    size = 2
+    while size <= n:                                  # log2(n) tầng
+        wr, wi = math.cos(-TAU / size), math.sin(-TAU / size)
+        for i in range(0, n, size):                   # từng khối
+            cr, ci = 1.0, 0.0
+            for k in range(size // 2):                # từng bướm
+                a, b = i + k, i + k + size // 2
+                tr = re[b] * cr - im[b] * ci
+                ti = re[b] * ci + im[b] * cr
+                re[b], im[b] = re[a] - tr, im[a] - ti
+                re[a], im[a] = re[a] + tr, im[a] + ti
+                cr, ci = cr * wr - ci * wi, cr * wi + ci * wr
+        size <<= 1
+
+
+def power_spectrum(x, win):
+    """Khung đã detrend x cửa sổ -> FFT -> công suất re^2 + im^2 của các bin 0..n/2."""
+    n = len(x)
+    re = [x[i] * win[i] for i in range(n)]
+    im = [0.0] * n
+    fft(re, im)
+    return [re[k] * re[k] + im[k] * im[k] for k in range(n // 2 + 1)]
+
+
+def dominant_frequency(power, fs):
+    """Bin mạnh nhất (bỏ bin 0), rồi nội suy parabol trên log công suất
+    để ra tần số chính xác hơn độ phân giải fs/n."""
+    n = (len(power) - 1) * 2
+    k = max(range(1, len(power)), key=lambda i: power[i])   # có nhiều bin bằng nhau thì lấy bin đầu
+    delta = 0.0
+    if k < len(power) - 1:
+        a = math.log(power[k - 1] + 1e-30)
+        b = math.log(power[k] + 1e-30)
+        c = math.log(power[k + 1] + 1e-30)
+        curve = a - 2 * b + c
+        if curve < 0:
+            delta = 0.5 * (a - c) / curve
+    return {"bin": k, "freq": (k + delta) * fs / n, "power": power[k]}
+
+
+def band_energy(power, edges, fs):
+    """Cộng công suất theo dải tần. edges là các mép dải (Hz); bin 0 (DC) không tính."""
+    n = (len(power) - 1) * 2
+    bands = [0.0] * (len(edges) - 1)
+    for k in range(1, len(power)):
+        f = k * fs / n
+        i = max(i for i, edge in enumerate(edges) if f >= edge)
+        bands[min(len(bands) - 1, i)] += power[k]
+    return bands
+  </script>
+  <script type="text/plain" id="demo-py">
+"""Chạy cả pipeline trên một khung, với đúng tín hiệu mặc định của mô phỏng ở đầu bài.
+
+Đặt cạnh fir.py, features.py, fft.py rồi chạy: python demo.py
+Muốn thử tín hiệu khác thì sửa hàm sample(); phần còn lại không phải đổi gì.
+"""
+import math
+
+from features import detrend, mean, time_features
+from fft import band_energy, dominant_frequency, make_window, power_spectrum
+from fir import design_lowpass, fir_valid
+
+FS = 100                         # tần số lấy mẫu (Hz)
+N = 128                          # số mẫu trong một khung
+TAPS, FC = 16, 20                # bộ lọc: 16 tap, cắt ở 20 Hz
+EDGES = [0, 12.5, 25, 37.5, 50]  # 4 dải chia đều từ 0 đến Nyquist (Hz)
+TAU = 2 * math.pi
+M32 = 0xFFFFFFFF
+
+
+def hash32(n):
+    """Băm số nguyên thành số trong [0, 1): cùng một n luôn ra cùng một kết quả."""
+    n &= M32
+    n = ((n ^ (n >> 16)) * 0x45D9F3B) & M32
+    n = ((n ^ (n >> 16)) * 0x45D9F3B) & M32
+    return (n ^ (n >> 16)) / 4294967296
+
+
+def gauss(n):
+    """Nhiễu Gauss (Box-Muller), là hàm thuần của chỉ số mẫu."""
+    return math.sqrt(-2 * math.log(hash32(2 * n + 1) or 1e-9)) * math.cos(TAU * hash32(2 * n + 2))
+
+
+def sample(n):
+    """Hai sóng sin (6.4 Hz và 37 Hz), thành phần DC bằng 3 và nhiễu."""
+    return (math.sin(TAU * 6.4 * n / FS)
+            + 0.4 * math.sin(TAU * 37 * n / FS + 1.3)
+            + 3
+            + 0.15 * gauss(n))
+
+
+def analyse(first, count):
+    """Lấy `count` mẫu từ chỉ số `first`, lọc FIR, rồi tính đặc trưng của khung N mẫu mới nhất."""
+    h = design_lowpass(TAPS, FC, FS)
+    raw = [sample(first - (TAPS - 1) + i) for i in range(count + TAPS - 1)]  # thêm lịch sử cho FIR
+    frame = fir_valid(h, raw)[-N:]
+    x = detrend(frame)
+    power = power_spectrum(x, make_window("hann", N))   # chỉ nhánh FFT nhân cửa sổ
+    bands = band_energy(power, EDGES, FS)
+    return mean(frame), time_features(x), dominant_frequency(power, FS), bands
+
+
+if __name__ == "__main__":
+    dc, t, dom, bands = analyse(first=0, count=3 * N)   # khung kết thúc ở mẫu 383, t = 3.84 s
+    total = sum(bands)
+    print(f"DC      {dc:.2f}")
+    print(f"RMS     {t['rms']:.3f}   Peak {t['peak']:.2f}   Crest {t['crest']:.2f}   Kurtosis {t['kurtosis']:.2f}")
+    print(f"f trội  {dom['freq']:.2f} Hz (bin {dom['bin']})")
+    print("Dải     " + " / ".join(f"{100 * b / total:.0f}%" for b in bands))
+  </script>
+  <script>
+/* Bản JavaScript của fir.py, dùng cho mô phỏng. */
 /* Thiết kế và chạy bộ lọc FIR thông thấp. Viết bằng dấu phẩy động cho dễ đọc;
  * bản số nguyên làm đúng các phép này bằng fir_q15() trong fixed_point.h. */
 (function (global) {
-  // Thiết kế offline bằng windowed-sinc + cửa sổ Hamming. fc là điểm -6 dB, tính bằng Hz.
-  function designLowpass(taps, fc, fs) {
+  // Thiết kế offline bằng windowed-sinc. fc là điểm -6 dB, tính bằng Hz.
+  // window = 'hamming' là mặc định; 'rect' là cắt cụt thô, để thấy gợn Gibbs.
+  function designLowpass(taps, fc, fs, window = 'hamming') {
     const f = fc / fs;                       // chu kỳ trên mỗi mẫu
     const mid = (taps - 1) / 2;              // tâm đối xứng (là x.5 khi số tap chẵn)
     const h = new Float64Array(taps);
@@ -441,8 +1212,8 @@ uint32_t isqrt_u64(uint64_t v) {
     for (let n = 0; n < taps; n++) {
       const x = n - mid;
       const sinc = x === 0 ? 1 : Math.sin(2 * Math.PI * f * x) / (2 * Math.PI * f * x);
-      const hamming = 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / (taps - 1));
-      h[n] = 2 * f * sinc * hamming;
+      const w = window === 'hamming' ? 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / (taps - 1)) : 1;
+      h[n] = 2 * f * sinc * w;
       sum += h[n];
     }
     return h.map((v) => v / sum);            // chuẩn hoá: độ lợi DC đúng bằng 1
@@ -474,7 +1245,8 @@ uint32_t isqrt_u64(uint64_t v) {
   global.DSP = Object.assign(global.DSP || {}, { designLowpass, firValid, gainSq });
 })(globalThis);
   </script>
-  <script id="features-code">
+  <script>
+/* Bản JavaScript của features.py, dùng cho mô phỏng. */
 /* Đặc trưng miền thời gian. Đầu vào là một khung mẫu đã lọc. */
 (function (global) {
   const mean = (x) => x.reduce((a, v) => a + v, 0) / x.length;
@@ -484,6 +1256,14 @@ uint32_t isqrt_u64(uint64_t v) {
     const m = mean(x);
     return Float64Array.from(x, (v) => v - m);
   };
+
+  // Detrend tuyến tính: trừ đường thẳng khớp nhất theo bình phương tối thiểu (bỏ cả DC lẫn độ dốc).
+  function detrendLinear(x) {
+    const n = x.length, mid = (n - 1) / 2, m = mean(x);
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) { num += (i - mid) * (x[i] - m); den += (i - mid) ** 2; }
+    return Float64Array.from(x, (v, i) => v - (m + (num / den) * (i - mid)));
+  }
 
   // x phải là khung đã detrend; khi đó variance = RMS².
   function timeFeatures(x) {
@@ -506,10 +1286,11 @@ uint32_t isqrt_u64(uint64_t v) {
     };
   }
 
-  global.DSP = Object.assign(global.DSP || {}, { mean, detrend, timeFeatures });
+  global.DSP = Object.assign(global.DSP || {}, { mean, detrend, detrendLinear, timeFeatures });
 })(globalThis);
   </script>
-  <script id="fft-code">
+  <script>
+/* Bản JavaScript của fft.py, dùng cho mô phỏng. */
 /* Cửa sổ, FFT radix-2 và các đặc trưng miền tần số. */
 (function (global) {
   const TAU = 2 * Math.PI;
@@ -592,8 +1373,8 @@ uint32_t isqrt_u64(uint64_t v) {
   global.DSP = Object.assign(global.DSP || {}, { makeWindow, fft, powerSpectrum, dominantFrequency, bandEnergy });
 })(globalThis);
   </script>
-  <script id="sim-code">
-/* Trình mô phỏng pipeline: tạo tín hiệu, cho đi qua các khối trong fir.js, features.js, fft.js
+  <script>
+/* Trình mô phỏng pipeline: tạo tín hiệu, cho đi qua các khối của fir.py, features.py, fft.py (bản JS)
  * rồi vẽ ba khung nhìn (theo thời gian, đầu vào FFT, phổ). Mọi con số hiển thị đều do DSP.* tính ra. */
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -918,6 +1699,711 @@ uint32_t isqrt_u64(uint64_t v) {
 
   for (const id in FORMAT) $(id + 'o').value = FORMAT[id](p[id]);
   redraw();
+})();
+  </script>
+  <script>
+/* Khung dùng chung cho các mô phỏng nhỏ ở từng phần của bài, vẽ cùng kiểu với mô phỏng đầu bài.
+ * Viz.sim(id, formats, draw) tìm mọi input/select có name trong <section id="id">, rồi gọi
+ * draw(p, views, c, s) mỗi khi tham số, kích thước khung hay theme đổi:
+ *   p      giá trị các tham số theo name
+ *   views  các canvas trong section theo thứ tự xuất hiện: { ctx, w, h }
+ *   c      bảng màu đọc từ CSS
+ *   s      chính mô phỏng này: s.root là section, s.p là tham số gần nhất
+ * draw trả về { tên: chữ }; chữ được điền vào phần tử có data-out="tên". `formats` làm việc đó
+ * cho giá trị của từng thanh trượt (cùng tên với thanh trượt). */
+(function (global) {
+  const TAU = 2 * Math.PI;
+  const sims = [];
+
+  // Nhiễu là hàm thuần của chỉ số mẫu (như mô phỏng đầu bài), nên đổi tham số thì cả lịch sử đổi theo nhất quán.
+  function hash(n) {
+    n = Math.imul((n | 0) ^ ((n | 0) >>> 16), 0x45d9f3b);
+    n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+  const gauss = (n) => Math.sqrt(-2 * Math.log(hash(2 * n + 1) || 1e-9)) * Math.cos(TAU * hash(2 * n + 2));
+  const group = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');   // 386554921 -> 386 554 921
+
+  function palette() {
+    const cs = getComputedStyle(document.documentElement);
+    const get = (name) => cs.getPropertyValue(name).trim();
+    return {
+      text: get('--text'), muted: get('--muted'), faint: get('--faint'), border: get('--border'),
+      accent: get('--accent'), indigo: get('--indigo'), green: get('--green'), mono: get('--mono'),
+    };
+  }
+
+  function fit(v) {                                // canvas sắc nét: kích thước thật = kích thước CSS × devicePixelRatio
+    const dpr = window.devicePixelRatio || 1;
+    const r = v.canvas.getBoundingClientRect();
+    v.w = r.width; v.h = r.height;
+    v.canvas.width = Math.round(r.width * dpr);
+    v.canvas.height = Math.round(r.height * dpr);
+    v.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // Xoá khung và ghi tiêu đề ở góc trên; `right` chỉ hiện nếu còn chỗ.
+  function title(v, c, left, right) {
+    const { ctx, w, h } = v;
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '11px ' + c.mono;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = c.text;
+    ctx.textAlign = 'left';
+    ctx.fillText(left, 8, 13);
+    const room = w - 16 - ctx.measureText(left).width;
+    if (right && ctx.measureText(right).width + 16 < room) {
+      ctx.fillStyle = c.muted;
+      ctx.textAlign = 'right';
+      ctx.fillText(right, w - 8, 13);
+    }
+  }
+
+  function polyline(ctx, n, xOf, yOf, color, width, dash) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) (i ? ctx.lineTo : ctx.moveTo).call(ctx, xOf(i), yOf(i));
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round';
+    ctx.setLineDash(dash || []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function line(ctx, x0, y0, x1, y1, color, dash) {
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+    ctx.strokeStyle = color; ctx.lineWidth = 1;
+    ctx.setLineDash(dash || []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function dot(ctx, x, y, r, color) {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU);
+    ctx.fillStyle = color; ctx.fill();
+  }
+
+  function label(ctx, text, x, y, color, align) {
+    ctx.fillStyle = color; ctx.textAlign = align || 'left';
+    ctx.fillText(text, x, y);
+  }
+
+  const value = (el) => (el.type === 'checkbox' ? el.checked : el.value !== '' && !isNaN(el.value) ? +el.value : el.value);
+
+  function sim(id, formats, draw) {
+    const root = document.getElementById(id);
+    const views = Array.from(root.querySelectorAll('canvas'), (canvas) => ({ canvas, ctx: canvas.getContext('2d'), w: 0, h: 0 }));
+    const controls = Array.from(root.querySelectorAll('input[name], select[name]'));
+    const put = (name, text) => root.querySelectorAll(`[data-out="${name}"]`).forEach((el) => { el.textContent = text; });
+    const s = {
+      root,
+      p: {},
+      render() {
+        if (views.some((v) => !v.w)) return;       // chưa đo được kích thước (đang ẩn hoặc chưa bố cục)
+        s.p = Object.fromEntries(controls.map((el) => [el.name, value(el)]));
+        for (const name in formats) put(name, formats[name](s.p[name]));
+        const out = draw(s.p, views, palette(), s) || {};
+        for (const name in out) put(name, out[name]);
+      },
+      resize() { views.forEach(fit); s.render(); },
+    };
+    controls.forEach((el) => el.addEventListener('input', s.render));
+    sims.push(s);
+    new ResizeObserver(() => requestAnimationFrame(s.resize)).observe(root);   // hoãn một nhịp để đổi bố cục trong lúc vẽ không gây vòng lặp
+    return s;
+  }
+
+  const redrawAll = () => sims.forEach((s) => s.render());
+  new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+  if (document.fonts) document.fonts.ready.then(redrawAll);
+
+  global.Viz = { sim, hash, gauss, group, title, polyline, line, dot, label };
+})(globalThis);
+  </script>
+  <script>
+/* Mô phỏng ở phần "Lấy mẫu": sóng cos tần số f được lấy mẫu ở Fs. Tần số hiện ra là |f − k·Fs|. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const SPAN = 0.2;                                // thời gian hiển thị (giây)
+
+  Viz.sim('sim-alias', { f: (v) => v + ' Hz' }, (p, [v], c) => {
+    const { ctx, w, h } = v;
+    const nyq = p.fs / 2;
+    const k = Math.round(p.f / p.fs);              // số nguyên gần f/Fs nhất
+    const alias = Math.abs(p.f - p.fs * k);
+    const folded = p.f > nyq;
+    Viz.title(v, c, 'Theo thời gian, 0.2 s', `Fs = ${p.fs} Hz · ${Math.floor(SPAN * p.fs) + 1} mẫu`);
+
+    const left = 8, right = 8, top = 24, bottom = h - 8;
+    const mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 4;
+    const xOf = (t) => left + (t / SPAN) * (w - left - right);
+    const yOf = (val) => mid - val * amp;
+    const wave = (f, color, width) => {
+      const pts = 800;
+      Viz.polyline(ctx, pts + 1, (i) => xOf((i / pts) * SPAN), (i) => yOf(Math.cos(TAU * f * (i / pts) * SPAN)), color, width);
+    };
+
+    Viz.line(ctx, left, mid, w - right, mid, c.border);
+    wave(p.f, c.faint, 1.25);                      // sóng thật
+    if (folded) wave(alias, c.accent, 1.75);       // sóng mà các điểm mẫu "kể lại"
+    for (let n = 0; n / p.fs <= SPAN; n++) {
+      const x = xOf(n / p.fs), y = yOf(Math.cos((TAU * p.f * n) / p.fs));
+      Viz.line(ctx, x, mid, x, y, c.indigo);
+      Viz.dot(ctx, x, y, 3, c.indigo);
+    }
+
+    let msg;
+    if (!folded) msg = `${p.f} Hz không vượt Nyquist (${nyq} Hz): các điểm mẫu đi đúng theo sóng thật, đọc lại được ${p.f} Hz.`;
+    else if (alias === 0) msg = `|${p.f} − ${k}·${p.fs}| = 0: mỗi lần lấy mẫu rơi đúng cùng pha, chuỗi mẫu là một hằng số (DC).`;
+    else msg = `${p.f} Hz vượt Nyquist (${nyq} Hz): |${p.f} − ${k}·${p.fs}| = ${alias} Hz. Các điểm mẫu nằm trên cả sóng thật lẫn sóng ${alias} Hz màu đỏ, nên từ chuỗi mẫu không thể phân biệt.`;
+    return { nyq: nyq + ' Hz', alias: alias + ' Hz', msg };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Số nguyên thay cho dấu phẩy động": nhân và cộng hai số Q1.F bằng số nguyên. */
+(function () {
+  const { group } = Viz;
+
+  const sim = Viz.sim('sim-q', { a: (v) => v.toFixed(3), b: (v) => v.toFixed(3) }, (p, _, c, s) => {
+    const F = p.bits, one = 2 ** F, max = one - 1;
+    const clamp = (v) => Math.max(-one, Math.min(max, v));
+    const real = (raw) => (raw / one).toFixed(5);
+
+    const ra = Math.round(p.a * one), rb = Math.round(p.b * one);
+    const prod = ra * rb;                          // đơn vị 2^-2F; nhỏ hơn 2^53 nên Number vẫn chính xác
+    const exact = prod / one;                      // tích đúng của hai số nguyên, tính theo đơn vị Q.F
+    const cut = clamp(Math.floor(exact));          // dịch phải F bit: luôn làm tròn xuống
+    const rnd = clamp(Math.floor((prod + one / 2) / one));   // cộng nửa đơn vị rồi mới dịch
+    const sum = ra + rb;
+    const wrap = ((((sum + one) % (2 * one)) + 2 * one) % (2 * one)) - one;   // quấn vòng trong F+1 bit có dấu
+
+    const note = (r) => (r !== clamp(r) ? ' (bão hoà)' : '');
+    const rows = [
+      [`raw a = round(a · 2^${F})`, group(ra), `= ${real(ra)}`],
+      [`raw b = round(b · 2^${F})`, group(rb), `= ${real(rb)}`],
+      [`raw a × raw b, đơn vị 2^-${2 * F}`, group(prod), `= ${(prod / one / one).toFixed(5)}`],
+      [`dịch phải ${F} bit, cắt xuống`, group(cut), `${real(cut)} · lệch ${(cut - exact).toFixed(2)} LSB${note(Math.floor(exact))}`],
+      [`cộng 2^${F - 1} rồi dịch phải ${F} bit`, group(rnd), `${real(rnd)} · lệch ${(rnd - exact).toFixed(2)} LSB${note(Math.floor((prod + one / 2) / one))}`],
+      ['a + b, quấn vòng', group(wrap), real(wrap)],
+      ['a + b, bão hoà', group(clamp(sum)), real(clamp(sum))],
+    ];
+    s.root.querySelector('tbody').replaceChildren(...rows.map((cells) => {
+      const tr = document.createElement('tr');
+      for (const text of cells) { const td = document.createElement('td'); td.textContent = text; tr.append(td); }
+      return tr;
+    }));
+    return { truth: `${(p.a * p.b).toFixed(5)}, tức ${(p.a * p.b * one).toFixed(2)} đơn vị cuối` };
+  });
+
+  // Thử hàng nghìn phép nhân ngẫu nhiên để thấy độ lệch trung bình của hai cách dịch bit.
+  const out = sim.root.querySelector('[data-out="bias"]');
+  sim.root.querySelector('[data-act="bias"]').addEventListener('click', () => {
+    const one = 2 ** sim.p.bits, n = 10000;
+    let cut = 0, rnd = 0;
+    for (let i = 0; i < n; i++) {
+      const a = Math.floor(Viz.hash(2 * i) * 2 * one) - one, b = Math.floor(Viz.hash(2 * i + 1) * 2 * one) - one;
+      const prod = a * b, exact = prod / one;
+      cut += Math.floor(exact) - exact;
+      rnd += Math.floor((prod + one / 2) / one) - exact;
+    }
+    out.textContent = `${n} phép nhân ngẫu nhiên: cắt xuống lệch trung bình ${(cut / n).toFixed(3)} LSB, cộng nửa đơn vị lệch ${(rnd / n).toFixed(3)} LSB.`;
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Bộ lọc FIR": thiết kế windowed-sinc, nhìn hệ số, đáp ứng tần số và kết quả lọc. */
+(function () {
+  const FS = 100;
+  const TAU = 2 * Math.PI;
+  const TONES = [6.4, 37];                         // hai tone của tín hiệu thử, giống mô phỏng đầu bài
+  const input = (n) => Math.sin((TAU * TONES[0] * n) / FS) + 0.4 * Math.sin((TAU * TONES[1] * n) / FS + 1.3) + 0.15 * Viz.gauss(n);
+  const dB = (g2) => 10 * Math.log10(g2 + 1e-12);   // g2 = |H|², công suất
+  const SHOWN = 120;                               // số mẫu vẽ ở khung thời gian
+
+  Viz.sim('sim-fir', { taps: String, fc: (v) => v + ' Hz' }, (p, [vh, vr, vt], c) => {
+    const L = p.taps, delay = (L - 1) / 2;
+    const h = DSP.designLowpass(L, p.fc, FS, p.win);
+    const other = DSP.designLowpass(L, p.fc, FS, p.win === 'hamming' ? 'rect' : 'hamming');
+
+    // ---- hệ số h[k]
+    {
+      const { ctx, w, h: H } = vh;
+      Viz.title(vh, c, 'Hệ số h[k] (đáp ứng xung)', `tâm đối xứng ở k = ${delay}`);
+      const left = 8, top = 24, bottom = H - 8, mid = (top + bottom) / 2;
+      const peak = Math.max(...h.map(Math.abs));
+      const xOf = (k) => left + ((k + 0.5) / L) * (w - 2 * left);
+      const yOf = (val) => mid - (val / peak) * (mid - top - 2);
+      Viz.line(ctx, left, mid, w - left, mid, c.border);
+      for (let k = 0; k < L; k++) {
+        const centre = Math.abs(k - delay) < 1;     // tap (hoặc hai tap) ở giữa
+        Viz.line(ctx, xOf(k), mid, xOf(k), yOf(h[k]), centre ? c.accent : c.indigo);
+        Viz.dot(ctx, xOf(k), yOf(h[k]), 2.5, centre ? c.accent : c.indigo);
+      }
+    }
+
+    // ---- đáp ứng tần số
+    {
+      const { ctx, w, h: H } = vr;
+      Viz.title(vr, c, '|H(f)| theo dB', `fc = ${p.fc} Hz`);
+      const left = 40, right = 8, top = 24, bottom = H - 20, TOP_DB = 6, LOW_DB = -80;
+      const xOfHz = (f) => left + (f / (FS / 2)) * (w - left - right);
+      const yOfDb = (db) => top + ((TOP_DB - Math.max(LOW_DB, Math.min(TOP_DB, db))) / (TOP_DB - LOW_DB)) * (bottom - top);
+      for (const db of [0, -20, -40, -60, -80]) {
+        Viz.line(ctx, left, yOfDb(db), w - right, yOfDb(db), c.border);
+        Viz.label(ctx, db, left - 6, yOfDb(db) + 4, c.muted, 'right');
+      }
+      for (let f = 0; f <= FS / 2; f += 10) Viz.label(ctx, f + (f === FS / 2 ? ' Hz' : ''), f === FS / 2 ? w - right : xOfHz(f), H - 5, c.muted, f === FS / 2 ? 'right' : 'center');
+      for (const f of TONES) Viz.line(ctx, xOfHz(f), top, xOfHz(f), bottom, c.muted, [1, 3]);
+      Viz.line(ctx, left, yOfDb(-6), w - right, yOfDb(-6), c.muted, [5, 4]);
+      Viz.line(ctx, xOfHz(p.fc), top, xOfHz(p.fc), bottom, c.accent, [5, 4]);
+      const pts = 200;
+      const curve = (taps, color, width) => Viz.polyline(ctx, pts + 1, (i) => xOfHz((i / pts) * (FS / 2)),
+        (i) => yOfDb(dB(DSP.gainSq(taps, (i / pts) * (FS / 2), FS))), color, width);
+      curve(other, c.faint, 1.25);
+      curve(h, c.indigo, 1.75);
+    }
+
+    // ---- kết quả lọc trên tín hiệu thử
+    {
+      const { ctx, w, h: H } = vt;
+      Viz.title(vt, c, 'Tín hiệu thử: sin 6.4 Hz + sin 37 Hz + nhiễu', `trễ ${delay} mẫu = ${delay * 10} ms`);
+      const left = 8, top = 24, bottom = H - 8, half = 1.9;
+      const xOf = (i) => left + ((i + 0.5) / SHOWN) * (w - 2 * left);
+      const yOf = (val) => bottom - ((val + half) / (2 * half)) * (bottom - top);
+      const raw = Float64Array.from({ length: SHOWN + L - 1 }, (_, i) => input(i - (L - 1)));
+      const out = DSP.firValid(h, raw);
+      Viz.line(ctx, left, yOf(0), w - left, yOf(0), c.border);
+      Viz.polyline(ctx, SHOWN, xOf, (i) => yOf(raw[i + L - 1]), c.faint, 1);
+      Viz.polyline(ctx, SHOWN, xOf, (i) => yOf(out[i]), c.indigo, 1.75);
+    }
+
+    const f0 = p.fc + (2 * FS) / L;                // bắt đầu đo stopband sau dải chuyển tiếp
+    let worst = 0;
+    for (let f = f0; f <= FS / 2; f += 0.1) worst = Math.max(worst, DSP.gainSq(h, f, FS));
+    return {
+      gfc: dB(DSP.gainSq(h, p.fc, FS)).toFixed(1) + ' dB',
+      g37: dB(DSP.gainSq(h, TONES[1], FS)).toFixed(1) + ' dB',
+      stop: f0 < FS / 2 ? dB(worst).toFixed(1) + ' dB' : '–',
+      delay: `${delay} mẫu = ${delay * 10} ms`,
+    };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Cửa sổ trượt": một cú va đập 8 mẫu rơi vào đâu so với ranh giới các khung. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const FS = 100;
+  const T = 640;                                   // tổng số mẫu (6.4 s)
+  const LEN = 8;                                   // độ dài cú va đập (mẫu)
+
+  // Nền là sin 5 Hz cộng nhiễu nhỏ; cú va đập là một gói sóng 20 Hz dài LEN mẫu.
+  function signal(pos, amp) {
+    return Float64Array.from({ length: T }, (_, i) => {
+      const j = i - pos;
+      const hit = j >= 0 && j < LEN ? amp * Math.sin((Math.PI * (j + 0.5)) / LEN) ** 2 * Math.cos((TAU * 20 * j) / FS) : 0;
+      return 0.5 * Math.sin((TAU * 5 * i) / FS) + 0.1 * Viz.gauss(i) + hit;
+    });
+  }
+
+  Viz.sim('sim-win', { pos: (v) => `mẫu ${v}–${v + LEN - 1}`, amp: (v) => v.toFixed(1), thr: (v) => v.toFixed(1) }, (p, [vs, vk], c) => {
+    const N = p.n, H = Math.max(1, Math.round(N * (1 - p.overlap)));
+    const x = signal(p.pos, p.amp);
+    const count = Math.floor((T - N) / H) + 1;
+    const frames = Array.from({ length: count }, (_, j) => {
+      const start = j * H, end = start + N - 1;
+      const seen = Math.max(0, Math.min(end, p.pos + LEN - 1) - Math.max(start, p.pos) + 1);   // số mẫu cú va đập nằm trong khung
+      return { j, start, end, seen, k: DSP.timeFeatures(DSP.detrend(x.subarray(start, end + 1))).kurtosis };
+    });
+    const caught = frames.filter((f) => f.k >= p.thr);
+    const colour = (f) => (f.k >= p.thr ? c.accent : f.seen ? c.indigo : c.faint);
+
+    // ---- tín hiệu và các khung
+    {
+      const { ctx, w, h } = vs;
+      Viz.title(vs, c, 'Tín hiệu và các khung', `N = ${N} · hop = ${H}`);
+      const left = 8, right = 8, sigTop = 22, sigBottom = 74, rowsTop = 84, rowsBottom = h - 18;
+      const xOf = (i) => left + (i / T) * (w - left - right);
+      const yOf = (val) => (sigTop + sigBottom) / 2 - val * ((sigBottom - sigTop) / 2 / (p.amp + 0.7));
+      ctx.fillStyle = c.accent; ctx.globalAlpha = 0.15;
+      ctx.fillRect(xOf(p.pos), sigTop, Math.max(2, xOf(LEN) - xOf(0)), rowsBottom - sigTop);   // vị trí cú va đập, kéo xuống qua mọi khung
+      ctx.globalAlpha = 1;
+      Viz.polyline(ctx, T, (i) => xOf(i + 0.5), (i) => yOf(x[i]), c.indigo, 1);
+      const rowH = Math.min(14, (rowsBottom - rowsTop) / count);
+      frames.forEach((f) => {
+        ctx.fillStyle = colour(f);
+        ctx.globalAlpha = f.seen || f.k >= p.thr ? 1 : 0.45;
+        ctx.fillRect(xOf(f.start), rowsTop + f.j * rowH, xOf(f.end + 1) - xOf(f.start), Math.max(2, rowH - 1.5));
+      });
+      ctx.globalAlpha = 1;
+      for (let s = 0; s <= T / FS; s++) Viz.label(ctx, s + ' s', Math.min(w - 14, Math.max(14, xOf(s * FS))), h - 5, c.muted, 'center');
+    }
+
+    // ---- kurtosis của từng khung, đặt ở lúc khung kết thúc
+    {
+      const { ctx, w, h } = vk;
+      Viz.title(vk, c, 'Kurtosis của từng khung', `ngưỡng = ${p.thr.toFixed(1)}`);
+      const left = 8, right = 8, top = 24, bottom = h - 8;
+      const ymax = Math.max(8, ...frames.map((f) => f.k)) * 1.1;
+      const xOf = (i) => left + (i / T) * (w - left - right);
+      const yOf = (val) => bottom - (val / ymax) * (bottom - top);
+      const bw = Math.max(3, Math.min(30, (H / T) * (w - left - right) * 0.7));
+      for (const f of frames) {
+        ctx.fillStyle = colour(f);
+        ctx.fillRect(xOf(f.end + 1) - bw, yOf(f.k), bw, bottom - yOf(f.k));
+      }
+      Viz.line(ctx, left, yOf(p.thr), w - right, yOf(p.thr), c.accent, [5, 4]);
+      Viz.line(ctx, left, bottom, w - right, bottom, c.border);
+    }
+
+    const touching = frames.filter((f) => f.seen);
+    const parts = touching.map((f) => `khung ${f.j + 1} thấy ${f.seen}/${LEN} mẫu (kurtosis ${f.k.toFixed(2)})`);
+    return {
+      count: `⌊(${T} − ${N}) / ${H}⌋ + 1 = ${count}`,
+      full: String(frames.filter((f) => f.seen === LEN).length),
+      kmax: Math.max(...frames.map((f) => f.k)).toFixed(2),
+      caught: String(caught.length),
+      msg: (caught.length ? `Phát hiện: ${caught.length} khung vượt ngưỡng.` : 'Bỏ lỡ: không khung nào vượt ngưỡng.') +
+        (parts.length ? ' Khung chạm cú va đập: ' + parts.join('; ') + '.' : ' Cú va đập nằm ngoài mọi khung.'),
+    };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Detrend": một sin cộng DC và baseline trôi, đo RMS theo ba cách. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const FS = 100, N = 128;
+  const F_SIN = 6.25;                              // đúng 8 chu kỳ trong N mẫu, nên RMS của sin không bị lệch vì cắt dở chu kỳ
+  const rms = (x) => Math.sqrt(x.reduce((a, v) => a + v * v, 0) / x.length);
+
+  Viz.sim('sim-detrend', { dc: (v) => v.toFixed(1), drift: (v) => v.toFixed(1), amp: (v) => v.toFixed(1) }, (p, [v], c) => {
+    const { ctx, w, h } = v;
+    const x = Float64Array.from({ length: N }, (_, i) => p.dc + (p.drift * i) / (N - 1) + p.amp * Math.sin((TAU * F_SIN * i) / FS));
+    const fixed = { none: x, mean: DSP.detrend(x), line: DSP.detrendLinear(x) }[p.method];
+    const names = { none: 'khung gốc', mean: 'trừ trung bình', line: 'trừ đường thẳng' };
+    Viz.title(v, c, `Khung ${N} mẫu`, `đang vẽ: ${names[p.method]}`);
+
+    const left = 8, top = 24, bottom = h - 8;
+    const lo = Math.min(0, ...x) - 0.5, hi = Math.max(0, ...x) + 0.5;
+    const xOf = (i) => left + (i / (N - 1)) * (w - 2 * left);
+    const yOf = (val) => bottom - ((val - lo) / (hi - lo)) * (bottom - top);
+    Viz.line(ctx, left, yOf(0), w - left, yOf(0), c.border);
+    Viz.label(ctx, '0', left, yOf(0) - 4, c.muted);
+    Viz.polyline(ctx, N, xOf, (i) => yOf(x[i]), c.faint, 1);
+    if (p.method !== 'none') Viz.polyline(ctx, N, xOf, (i) => yOf(fixed[i]), c.indigo, 1.75);
+
+    return {
+      r0: rms(x).toFixed(3),
+      r1: rms(DSP.detrend(x)).toFixed(3),
+      r2: rms(DSP.detrendLinear(x)).toFixed(3),
+      truth: (p.amp / Math.SQRT2).toFixed(3),
+    };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Đặc trưng miền thời gian": thêm xung giật vào nền và xem RMS so với kurtosis. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const FS = 100, N = 128;
+  const F_SIN = 6.25;                              // đúng 8 chu kỳ trong N mẫu: kurtosis của sin là 1.5 chính xác
+  const BASE_RMS = Math.SQRT1_2;                   // sin biên độ 1 và nhiễu Gauss σ = 0.707 cùng có RMS này
+  const pct = (a, b) => ((100 * a) / b).toFixed(0) + '%';
+
+  Viz.sim('sim-feat', { spikes: String, height: (v) => v.toFixed(1) + '× RMS' }, (p, [vs, vc], c) => {
+    const base = Float64Array.from({ length: N }, (_, i) => (p.base === 'sin'
+      ? Math.sin((TAU * F_SIN * i) / FS)
+      : BASE_RMS * Viz.gauss(i + 500)));
+    const x = Float64Array.from(base);
+    const at = [];
+    for (let j = 0; j < p.spikes; j++) {           // vị trí và dấu của xung là hàm thuần của j
+      const i = Math.floor(Viz.hash(j + 31) * N);
+      x[i] += (Viz.hash(j + 77) < 0.5 ? -1 : 1) * p.height * BASE_RMS;
+      at.push(i);
+    }
+    const d = DSP.detrend(x), d0 = DSP.detrend(base);
+    const t = DSP.timeFeatures(d), t0 = DSP.timeFeatures(d0);
+    const sum2 = d.reduce((a, v) => a + v * v, 0), sum4 = d.reduce((a, v) => a + v ** 4, 0);
+
+    {
+      const { ctx, w, h } = vs;
+      Viz.title(vs, c, `Khung ${N} mẫu (xám: nền, xanh: nền + xung)`, `${p.spikes} xung`);
+      const left = 8, top = 24, bottom = h - 8, half = Math.max(1.6, ...d.map(Math.abs)) * 1.05;
+      const xOf = (i) => left + (i / (N - 1)) * (w - 2 * left);
+      const yOf = (val) => bottom - ((val + half) / (2 * half)) * (bottom - top);
+      Viz.line(ctx, left, yOf(0), w - left, yOf(0), c.border);
+      Viz.polyline(ctx, N, xOf, (i) => yOf(d0[i]), c.faint, 1);
+      Viz.polyline(ctx, N, xOf, (i) => yOf(d[i]), c.indigo, 1.5);
+    }
+    {
+      const { ctx, w, h } = vc;
+      Viz.title(vc, c, 'Phần mỗi mẫu đóng góp vào Σd² (xám) và Σd⁴ (đỏ)');
+      const left = 8, top = 24, bottom = h - 8;
+      const s2 = Array.from(d, (v) => (v * v) / sum2), s4 = Array.from(d, (v) => v ** 4 / sum4);
+      const peak = Math.max(...s4, ...s2);
+      const slot = (w - 2 * left) / N;
+      const bar = (i, share, inset, width, color) => {
+        const len = (share / peak) * (bottom - top);
+        ctx.fillStyle = color;
+        ctx.fillRect(left + i * slot + inset, bottom - len, Math.max(1, width), len);
+      };
+      for (let i = 0; i < N; i++) {
+        bar(i, s2[i], 0, slot * 0.9, c.faint);
+        bar(i, s4[i], slot * 0.2, slot * 0.5, c.accent);
+      }
+    }
+
+    const sp2 = at.reduce((a, i) => a + d[i] ** 2, 0), sp4 = at.reduce((a, i) => a + d[i] ** 4, 0);
+    return {
+      rms: `${t.rms.toFixed(3)} (nền ${t0.rms.toFixed(3)}, ${t.rms >= t0.rms ? '+' : ''}${(100 * (t.rms / t0.rms - 1)).toFixed(0)}%)`,
+      peak: t.peak.toFixed(2),
+      crest: t.crest.toFixed(2),
+      kurt: `${t.kurtosis.toFixed(2)} (nền ${t0.kurtosis.toFixed(2)})`,
+      share: p.spikes ? `xung chiếm ${pct(sp4, sum4)} của Σd⁴ nhưng chỉ ${pct(sp2, sum2)} của Σd²` : '–',
+    };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "FFT": ướm sóng cos/sin tần số k lên khung rồi cộng các tích, đúng định nghĩa DFT. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const FS = 100, N = 32;                          // N nhỏ để nhìn thấy từng mẫu
+  const hz = (k) => ((k * FS) / N).toFixed(1) + ' Hz';
+
+  Viz.sim('sim-dft', {
+    a: (v) => `${v} chu kỳ = ${hz(v)}`,
+    b: (v) => `${v} chu kỳ = ${hz(v)}`,
+    ampb: (v) => v.toFixed(2),
+    k: (v) => `k = ${v} (${hz(v)})`,
+  }, (p, [vx, vp, vs], c) => {
+    const x = Float64Array.from({ length: N }, (_, n) => Math.cos((TAU * p.a * n) / N) + p.ampb * Math.cos((TAU * p.b * n) / N + 1));
+    const cos = (n) => Math.cos((TAU * p.k * n) / N);
+    let re = 0, im = 0;
+    for (let n = 0; n < N; n++) {
+      re += x[n] * cos(n);
+      im -= x[n] * Math.sin((TAU * p.k * n) / N);
+    }
+    const power = DSP.powerSpectrum(x, DSP.makeWindow('rect', N));
+
+    {
+      const { ctx, w, h } = vx;
+      Viz.title(vx, c, 'Khung x[n] (xanh) và sóng thử cos(2πkn/N) (đỏ)', `N = ${N}`);
+      const left = 8, top = 24, bottom = h - 8, mid = (top + bottom) / 2, amp = 2;
+      const xOf = (n) => left + ((n + 0.5) / N) * (w - 2 * left);
+      const yOf = (val) => mid - (val / amp) * (mid - top - 2);
+      Viz.line(ctx, left, mid, w - left, mid, c.border);
+      const pts = 400;
+      Viz.polyline(ctx, pts + 1, (i) => xOf((i / pts) * (N - 1)), (i) => yOf(Math.cos((TAU * p.k * ((i / pts) * (N - 1))) / N)), c.accent, 1.25, [4, 3]);
+      Viz.polyline(ctx, N, xOf, (n) => yOf(x[n]), c.indigo, 1.5);
+      for (let n = 0; n < N; n++) Viz.dot(ctx, xOf(n), yOf(x[n]), 2.5, c.indigo);
+    }
+    {
+      const { ctx, w, h } = vp;
+      Viz.title(vp, c, 'Tích x[n] · cos(2πkn/N); tổng các cột là Re X[k]', `Σ = ${re.toFixed(2)}`);
+      const left = 8, top = 24, bottom = h - 8, mid = (top + bottom) / 2, amp = 2;
+      const slot = (w - 2 * left) / N;
+      Viz.line(ctx, left, mid, w - left, mid, c.border);
+      for (let n = 0; n < N; n++) {
+        const val = x[n] * cos(n), y = mid - (val / amp) * (mid - top - 2);
+        ctx.fillStyle = c.indigo;
+        ctx.fillRect(left + n * slot + slot * 0.15, Math.min(y, mid), Math.max(1, slot * 0.7), Math.abs(mid - y));
+      }
+    }
+    {
+      const { ctx, w, h } = vs;
+      Viz.title(vs, c, 'Công suất |X[k]|² của mọi bin', 'chuẩn hoá theo bin lớn nhất');
+      const left = 8, top = 24, bottom = h - 20, peak = Math.max(...power);
+      const slot = (w - 2 * left) / power.length;
+      for (let k = 0; k < power.length; k++) {
+        const len = (power[k] / peak) * (bottom - top);
+        ctx.fillStyle = k === p.k ? c.accent : c.indigo;
+        ctx.fillRect(left + k * slot + slot * 0.15, bottom - len, Math.max(1, slot * 0.7), len);
+        if (k % 4 === 0) Viz.label(ctx, k, left + (k + 0.5) * slot, h - 5, c.muted, 'center');
+      }
+      Viz.line(ctx, left, bottom, w - left, bottom, c.border);
+    }
+
+    const show = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);   // tránh hiện "-0.00" do sai số làm tròn
+    return { re: show(re), im: show(im), pw: (re * re + im * im).toFixed(1), bin: `bin ${p.k} ứng với ${hz(p.k)}` };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Rò rỉ phổ": một tone ở vị trí bin tuỳ ý, nhân cửa sổ rồi FFT, nhìn bằng dB. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const FS = 100, N = 128, SHOWN = 40;             // chỉ vẽ bin 0 đến SHOWN cho dễ nhìn
+  const NAMES = { rect: 'chữ nhật', hann: 'Hann', hamming: 'Hamming', blackman: 'Blackman' };
+  const db = (P, peak) => 10 * Math.log10(P / peak + 1e-12);
+
+  Viz.sim('sim-leak', { bin: (v) => `bin ${v.toFixed(2)} = ${((v * FS) / N).toFixed(2)} Hz` }, (p, [vf, vs], c) => {
+    const x = Float64Array.from({ length: N }, (_, n) => Math.cos((TAU * p.bin * n) / N));
+    const win = DSP.makeWindow(p.win, N);
+    const power = DSP.powerSpectrum(x, win);
+    const ref = DSP.powerSpectrum(x, DSP.makeWindow('rect', N));
+    const peak = Math.max(...power), refPeak = Math.max(...ref);
+    const dom = DSP.dominantFrequency(power, FS);
+
+    {
+      const { ctx, w, h } = vf;
+      Viz.title(vf, c, 'Khung × cửa sổ (xanh), cửa sổ (nét đứt)', `cửa sổ ${NAMES[p.win]}`);
+      const left = 8, top = 24, bottom = h - 8, mid = (top + bottom) / 2, amp = mid - top - 2;
+      const xOf = (n) => left + (n / (N - 1)) * (w - 2 * left);
+      Viz.line(ctx, left, mid, w - left, mid, c.border);
+      Viz.polyline(ctx, N, xOf, (n) => mid - amp * win[n], c.muted, 1, [4, 3]);
+      Viz.polyline(ctx, N, xOf, (n) => mid + amp * win[n], c.muted, 1, [4, 3]);
+      Viz.polyline(ctx, N, xOf, (n) => mid - amp * x[n], c.faint, 1);
+      Viz.polyline(ctx, N, xOf, (n) => mid - amp * x[n] * win[n], c.indigo, 1.75);
+    }
+    {
+      const { ctx, w, h } = vs;
+      Viz.title(vs, c, 'Phổ công suất, dB so với đỉnh', `bin 0 đến ${SHOWN} · Δf = ${(FS / N).toFixed(3)} Hz`);
+      const left = 40, right = 8, top = 24, bottom = h - 20, LOW = -80;
+      const slot = (w - left - right) / (SHOWN + 1);
+      const yOf = (level) => top + (Math.min(0, Math.max(LOW, level)) / LOW) * (bottom - top);
+      for (const level of [0, -20, -40, -60, -80]) {
+        Viz.line(ctx, left, yOf(level), w - right, yOf(level), c.border);
+        Viz.label(ctx, level, left - 6, yOf(level) + 4, c.muted, 'right');
+      }
+      for (let k = 0; k <= SHOWN; k++) {
+        const y = yOf(db(power[k], peak));
+        ctx.fillStyle = k === dom.bin ? c.accent : c.indigo;
+        ctx.fillRect(left + k * slot + slot * 0.1, y, Math.max(1, slot * 0.8), bottom - y);
+        if (k % 5 === 0) Viz.label(ctx, k, left + (k + 0.5) * slot, h - 5, c.muted, 'center');
+      }
+      if (p.win !== 'rect') Viz.polyline(ctx, SHOWN + 1, (k) => left + (k + 0.5) * slot, (k) => yOf(db(ref[k], refPeak)), c.faint, 1.25);
+    }
+
+    const around = [dom.bin - 4, dom.bin + 4].filter((k) => k >= 0 && k < power.length).map((k) => db(power[k], peak));
+    const onBin = Math.abs(p.bin - Math.round(p.bin)) < 0.025;
+    return {
+      peak: `bin ${dom.bin}`,
+      est: dom.freq.toFixed(3) + ' Hz',
+      leak: Math.max(...around) < -100 ? '< -100 dB' : Math.max(...around).toFixed(1) + ' dB',
+      msg: onBin
+        ? `Tone nằm đúng giữa bin ${Math.round(p.bin)}: mọi chu kỳ trong khung đều trọn vẹn, nên ${p.win === 'rect' ? 'chữ nhật chỉ sáng đúng một bin' : 'ngoài thuỳ chính, phổ gần như bằng không'}.`
+        : `Tone nằm giữa bin ${Math.floor(p.bin)} và ${Math.ceil(p.bin)}: đầu và cuối khung không khớp nhau, năng lượng rò sang các bin lân cận. Đường xám là phổ của cửa sổ chữ nhật để đối chiếu.`,
+    };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Band energy": kéo mép dải và biên độ chung, so số tuyệt đối với tỉ lệ. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const FS = 100, N = 128;
+  const P_UNIT = (N / 4) ** 2;                     // công suất đỉnh của sin biên độ 1 nằm đúng bin, cửa sổ Hann: (N/4)²
+  const db = (P) => 10 * Math.log10(P / P_UNIT + 1e-12);
+  const hz = (f) => (Number.isInteger(f) ? f : f.toFixed(1));
+
+  Viz.sim('sim-band', {
+    f1: (v) => v.toFixed(1) + ' Hz', f2: (v) => v.toFixed(1) + ' Hz', a2: (v) => v.toFixed(2),
+    gain: (v) => '×' + v.toFixed(1), noise: (v) => v.toFixed(2),
+    e1: (v) => v + ' Hz', e2: (v) => v + ' Hz', e3: (v) => v + ' Hz',
+  }, (p, [vs, vb], c) => {
+    const x = DSP.detrend(Float64Array.from({ length: N }, (_, n) => p.gain * (
+      Math.sin((TAU * p.f1 * n) / FS) + p.a2 * Math.sin((TAU * p.f2 * n) / FS + 1.3) + p.noise * Viz.gauss(n + 4000))));
+    const power = DSP.powerSpectrum(x, DSP.makeWindow('hann', N));
+    const edges = [0, ...[p.e1, p.e2, p.e3].sort((a, b) => a - b), FS / 2];
+    const bands = DSP.bandEnergy(power, edges, FS);
+    const total = bands.reduce((a, v) => a + v, 0) || 1;
+
+    {
+      const { ctx, w, h } = vs;
+      Viz.title(vs, c, 'Phổ công suất, dB so với sin biên độ 1', 'các dải B1 đến B4');
+      const left = 40, right = 8, top = 40, bottom = h - 20, HI = 30, LOW = -50;
+      const xOfHz = (f) => left + (f / (FS / 2)) * (w - left - right);
+      const yOf = (level) => top + ((HI - Math.max(LOW, Math.min(HI, level))) / (HI - LOW)) * (bottom - top);
+      bands.forEach((_, b) => {
+        if (b % 2) { ctx.fillStyle = c.border; ctx.globalAlpha = 0.5; ctx.fillRect(xOfHz(edges[b]), top - 14, xOfHz(edges[b + 1]) - xOfHz(edges[b]), bottom - top + 14); ctx.globalAlpha = 1; }
+        Viz.label(ctx, `B${b + 1} ${((100 * bands[b]) / total).toFixed(0)}%`, xOfHz((edges[b] + edges[b + 1]) / 2), 28, c.muted, 'center');
+      });
+      for (const level of [30, 10, -10, -30, -50]) {
+        Viz.line(ctx, left, yOf(level), w - right, yOf(level), c.border);
+        Viz.label(ctx, level, left - 6, yOf(level) + 4, c.muted, 'right');
+      }
+      for (let f = 0; f <= FS / 2; f += 10) Viz.label(ctx, f + (f === FS / 2 ? ' Hz' : ''), f === FS / 2 ? w - right : xOfHz(f), h - 5, c.muted, f === FS / 2 ? 'right' : 'center');
+      const bw = Math.max(1, ((w - left - right) / (N / 2)) * 0.8);
+      for (let k = 1; k < power.length; k++) {
+        const y = yOf(db(power[k]));
+        ctx.fillStyle = c.indigo;
+        ctx.fillRect(xOfHz((k * FS) / N) - bw / 2, y, bw, bottom - y);
+      }
+    }
+    {
+      const { ctx, w, h } = vb;
+      Viz.title(vb, c, 'Tỉ lệ năng lượng mỗi dải (độ dài cột) và giá trị tuyệt đối');
+      const left = 8, top = 24, rowH = (h - top - 6) / bands.length, barMax = (w - 2 * left) * 0.5;
+      bands.forEach((e, b) => {
+        const y = top + b * rowH;
+        ctx.fillStyle = c.indigo;
+        ctx.fillRect(left, y + 3, Math.max(1, (e / total) * barMax), rowH - 8);
+        Viz.label(ctx, `B${b + 1} ${hz(edges[b])}–${hz(edges[b + 1])} Hz: ${((100 * e) / total).toFixed(1)}% · ${Math.round(e).toLocaleString('en-US')}`,
+          left + barMax + 12, y + rowH / 2 + 4, c.text);
+      });
+    }
+    return { total: Math.round(total).toLocaleString('en-US') };
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng ở phần "Kiểm chứng": FIR 16 tap bằng số nguyên Q1.15 so với bản dấu phẩy động, cùng một chuỗi số đầu vào. */
+(function () {
+  const TAU = 2 * Math.PI;
+  const FS = 100, L = 16, FC = 20, M = 256;
+  const Q15 = 32768;
+  const SCALES = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048];
+  const hf = DSP.designLowpass(L, FC, FS);
+
+  // Ba cách cài đặt phép cộng dồn của FIR. Cách "once" là bản chuẩn (golden) trong fixed_point.h.
+  function filter(mode, hq, xq, F) {
+    const half = 2 ** (F - 1), one = 2 ** F;
+    return Float64Array.from({ length: M }, (_, n) => {
+      let acc = 0;
+      for (let k = 0; k < L; k++) {
+        const prod = hq[k] * xq[n + L - 1 - k];
+        acc += mode === 'once' ? prod : mode === 'cut' ? Math.floor(prod / one) : Math.floor((prod + half) / one);
+      }
+      return mode === 'once' ? Math.floor((acc + half) / one) : acc;
+    });
+  }
+
+  Viz.sim('sim-verify', { bits: (v) => `Q1.${v}`, amp: (v) => v.toFixed(2) }, (p, [v], c) => {
+    const { ctx, w, h } = v;
+    const xq = Float64Array.from({ length: M + L - 1 }, (_, i) => {
+      const n = i - (L - 1);
+      const x = (p.amp / 1.4) * (Math.sin((TAU * 6.4 * n) / FS) + 0.4 * Math.sin((TAU * 37 * n) / FS + 1.3) + 0.03 * Viz.gauss(n + 9000));   // thêm chút nhiễu như dữ liệu thật
+      return Math.max(-Q15, Math.min(Q15 - 1, Math.round(x * Q15)));   // số nguyên mà ADC đưa vào
+    });
+    const hq = hf.map((val) => Math.round(val * 2 ** p.bits));
+    const ref = DSP.firValid(hf, xq);                                  // dấu phẩy động, cùng đầu vào, đơn vị LSB đầu ra
+    const golden = filter('once', hq, xq, p.bits);
+    const got = filter(p.mode, hq, xq, p.bits);
+    const err = got.map((val, n) => val - ref[n]);
+    const mean = err.reduce((a, e) => a + e, 0) / M;
+    const worst = Math.max(...err.map(Math.abs));
+    const scale = SCALES.find((s) => s >= worst * 1.1) || SCALES[SCALES.length - 1];
+
+    Viz.title(v, c, 'Sai số so với bản dấu phẩy động, đơn vị LSB của đầu ra', `thang ±${scale} LSB`);
+    const left = 40, right = 8, top = 24, bottom = h - 8, mid = (top + bottom) / 2;
+    const xOf = (n) => left + (n / (M - 1)) * (w - left - right);
+    const yOf = (e) => mid - (Math.max(-scale, Math.min(scale, e)) / scale) * (mid - top);
+    for (const e of [scale, 0, -scale]) {
+      Viz.line(ctx, left, yOf(e), w - right, yOf(e), c.border);
+      Viz.label(ctx, e, left - 6, yOf(e) + 4, c.muted, 'right');
+    }
+    Viz.polyline(ctx, M, xOf, (n) => yOf(err[n]), c.indigo, 1.25);
+    Viz.line(ctx, left, yOf(mean), w - right, yOf(mean), c.accent, [5, 4]);
+
+    const mismatch = got.reduce((a, val, n) => a + (val !== golden[n] ? 1 : 0), 0);
+    return {
+      maxe: worst.toFixed(1) + ' LSB',
+      bias: (mean >= 0 ? '+' : '') + mean.toFixed(2) + ' LSB',
+      diff: `${mismatch}/${M} mẫu`,
+    };
+  });
 })();
   </script>
 </body>
