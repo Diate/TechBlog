@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readPosts, postsScript, INDEX_URL } from './lib/posts-index.mjs';
+import { readPosts, postsScript, writeIndexFile, INDEX_URL } from './lib/posts-index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT) || 8000;
@@ -47,6 +47,9 @@ async function postsIndex() {
   const { posts, errors, warnings } = await readPosts(root);
   const report = [...errors.map((e) => `LỖI      ${e}`), ...warnings.map((w) => `cảnh báo  ${w}`)].join('\n');
   if (report !== lastReport) { lastReport = report; if (report) console.warn(report); }
+  // Giữ assets/posts-index.js trong repo luôn khớp posts/ (để Live Server dùng được). Có lỗi thì không ghi,
+  // kẻo bài đang sửa dở biến mất khỏi file sẽ được commit.
+  if (!errors.length && (await writeIndexFile(root, posts).catch(() => false))) console.log('Đã cập nhật assets/posts-index.js');
   return postsScript(posts);
 }
 

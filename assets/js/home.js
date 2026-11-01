@@ -105,7 +105,7 @@
     announce(`${filtered.length ? filtered.join(', ') + ': ' : ''}${shown.length} bài viết`);
     if (!shown.length) {
       list.replaceChildren(!window.POSTS
-        ? h('p', { class: 'empty' }, 'Chưa có danh sách bài. Hãy chạy trang qua npm run dev (hoặc npm run build), đừng mở thẳng file index.html.')
+        ? h('p', { class: 'empty' }, 'Chưa có danh sách bài. Hãy chạy npm run index (hoặc npm run dev) để sinh assets/posts-index.js.')
         : posts.length
         ? h('p', { class: 'empty' }, 'Không có bài nào khớp.', h('button', { type: 'button', onclick: reset }, 'Xoá bộ lọc'))
         : h('p', { class: 'empty' }, 'Chưa có bài viết nào.'));

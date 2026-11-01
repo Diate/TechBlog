@@ -7,6 +7,7 @@ import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readPosts, writeIndexFile } from './lib/posts-index.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [slug, ...rest] = process.argv.slice(2);
@@ -32,8 +33,12 @@ await copyFile(path.join(root, 'templates', 'post.html'), dest);
 const text = await readFile(dest, 'utf8');
 await writeFile(dest, text.replaceAll('{{TITLE}}', escapeHtml(title)).replaceAll('{{DATE}}', date));
 
+const { posts, errors } = await readPosts(root);
+if (!errors.length) await writeIndexFile(root, posts); // bản nháp (_slug) không vào danh sách
+
 console.log(`Đã tạo posts/${slug}.html`);
 console.log('Việc tiếp theo:');
-console.log(`  1. npm run dev rồi mở http://localhost:8000/posts/${slug}.html`);
+console.log(`  1. Xem bài: npm run dev rồi mở http://localhost:8000/posts/${slug}.html (hoặc mở file bằng Live Server)`);
 console.log('  2. Sửa file đó: nội dung, #tag trong .post-meta, <meta name="description"> (tóm tắt), mô phỏng.');
-console.log('  Trang chủ tự cập nhật, không cần đăng ký ở đâu. Chi tiết: templates/GUIDE.md');
+console.log('  3. Sửa xong thì chạy npm run index để trang chủ cập nhật khi xem bằng Live Server (npm run dev tự làm việc này).');
+console.log('  Chi tiết: templates/GUIDE.md');

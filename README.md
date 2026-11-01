@@ -25,20 +25,33 @@ templates/
 scripts/
   serve.mjs              chạy local (npm run dev)
   new-post.mjs           tạo topic mới (npm run new)
+  build-index.mjs        sinh assets/posts-index.js từ posts/*.html (npm run index)
   build-site.mjs         dựng thư mục site để deploy (npm run build; workflow cũng chạy lệnh này)
   lib/posts-index.mjs    quét posts/*.html để sinh danh sách bài
 .github/workflows/       tự deploy lên GitHub Pages khi push vào main
 ```
 
-Danh sách bài **không nằm trong repo**: nó được sinh từ `posts/*.html` thành `assets/posts-index.js`. `npm run dev` trả file đó theo yêu cầu (F5 là thấy bài mới), còn `npm run build` / workflow ghi nó vào `_site/`. Nhờ vậy trang tĩnh không cần sổ đăng ký nào để sửa tay.
+Danh sách bài được sinh từ `posts/*.html` thành `assets/posts-index.js`, và file này **được commit trong repo** để trang chủ chạy được bằng server tĩnh thuần (Live Server của VS Code...) hoặc mở thẳng `index.html`. Bạn không sửa nó tay, nó được cập nhật bởi:
+
+| Lệnh | Khi nào |
+|---|---|
+| `npm run new` | tạo bài mới: tự cập nhật |
+| `npm run dev` | mỗi lần tải trang chủ: tự cập nhật |
+| `npm run index` | **sau khi sửa tiêu đề, ngày, `#tag` hay tóm tắt của một bài, hoặc thêm/xoá bài bằng tay**, nếu bạn xem bằng Live Server |
+| `npm run build` / workflow | luôn sinh lại bản mới cho `_site/`, nên bản deploy không bao giờ bị cũ |
+
+Nhớ commit `assets/posts-index.js` cùng bài. Quên chạy `npm run index` chỉ làm trang chủ trên Live Server cũ đi; bản deploy vẫn đúng.
 
 ## Chạy local
+
+Cách nhanh nhất: mở `index.html` bằng Live Server (hoặc mở thẳng file), không cần cài hay chạy gì.
+Muốn F5 là thấy bài mới ngay mà không phải nhớ `npm run index`, chạy server của blog:
 
 ```
 npm run dev
 ```
 
-Mở http://localhost:8000. Cần chạy qua server (không mở thẳng file `.html`), vì danh sách bài do server sinh ra.
+Mở http://localhost:8000.
 Đổi cổng: `PORT=3000 npm run dev` (PowerShell: `$env:PORT=3000; npm run dev`).
 Terminal in LỖI hoặc cảnh báo nếu một bài thiếu thông tin (tiêu đề, ngày, chủ đề, tóm tắt).
 

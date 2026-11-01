@@ -10,8 +10,8 @@ Xem từng thành phần chạy thật (kèm HTML để chép): `npm run dev` r�
 
 1. Tạo bài: `npm run new -- ten-bai "Tiêu đề bài"`
    (PowerShell chặn `npm`: `node scripts/new-post.mjs ten-bai "Tiêu đề bài"`). Hoặc tự copy `templates/post.html` thành `posts/ten-bai.html`.
-2. Chạy `npm run dev`, mở http://localhost:8000/posts/ten-bai.html và để mở trong lúc làm. Sửa file rồi F5.
-3. Trong file đó, sửa theo khung ở mục 2. Có ba chỗ nhớ điền: `#tag` trong `.post-meta`, `<meta name="description">` (tóm tắt), và `<time>` nếu muốn đổi ngày.
+2. Chạy `npm run dev`, mở http://localhost:8000/posts/ten-bai.html và để mở trong lúc làm. Sửa file rồi F5. (Dùng Live Server thay cho `npm run dev` cũng được.)
+3. Trong file đó, sửa theo khung ở mục 2. Có ba chỗ nhớ điền: `#tag` trong `.post-meta`, `<meta name="description">` (tóm tắt), và `<time>` nếu muốn đổi ngày. Xem trang chủ bằng Live Server thì sau khi sửa các chỗ này hãy chạy `npm run index` (`npm run dev` tự làm), rồi commit cả `assets/posts-index.js`.
 4. Làm mô phỏng trong thẻ `<script id="sim-code">` ở cuối file (khung chạy sẵn, chỉ thay `update()` và `draw()`).
 5. Đi qua checklist ở mục 6, rồi commit và push. Site tự deploy.
 

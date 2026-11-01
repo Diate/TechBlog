@@ -8,7 +8,7 @@
 //   ảnh bìa   <meta name="cover" content="bars"> hoặc <template id="cover"><svg>...</svg></template> (tuỳ chọn)
 //
 // Tên file (bỏ .html) là slug. File bắt đầu bằng "_" là bản nháp: không vào danh sách, không được deploy.
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -73,3 +73,14 @@ export const postsScript = (posts) =>
   `/* Tự sinh bởi scripts/lib/posts-index.mjs từ posts/*.html, đừng sửa tay. */\nwindow.POSTS = ${JSON.stringify(posts, null, 2)};\n`;
 
 export const INDEX_URL = '/assets/posts-index.js';
+
+// Ghi assets/posts-index.js vào repo để trang chủ chạy được cả khi mở bằng server tĩnh thuần (Live Server...)
+// hoặc mở thẳng file. Chỉ ghi khi nội dung đổi (so sánh bỏ qua khác biệt CRLF/LF). Trả về true nếu đã ghi.
+export async function writeIndexFile(root, posts) {
+  const file = path.join(root, INDEX_URL);
+  const next = postsScript(posts);
+  const prev = await readFile(file, 'utf8').catch(() => null);
+  if (prev !== null && prev.replace(/\r\n/g, '\n') === next) return false;
+  await writeFile(file, next);
+  return true;
+}
