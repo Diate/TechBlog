@@ -21,7 +21,7 @@
     'hệ điều hành': 'blocks', 'kiến trúc phần mềm': 'blocks', 'trình duyệt': 'blocks', 'web': 'blocks',
     'học máy': 'curve', 'tối ưu hoá': 'curve', 'hiệu năng': 'curve',
     'đồ hoạ': 'grid', 'xử lý ảnh': 'grid', 'game': 'grid', 'quy hoạch động': 'grid',
-    'âm thanh': 'wave', 'vật lý': 'wave',
+    'âm thanh': 'wave', 'vật lý': 'wave', 'dsp': 'wave', 'xử lý tín hiệu': 'wave',
   };
   const HUES = ['--accent', '--indigo', '--green', '--ochre'];
 

@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipeline DSP cho dữ liệu cảm biến · Tech Blog</title>
+  <meta name="description" content="Đi qua từng khối của một pipeline DSP cho dữ liệu cảm biến: lấy mẫu, FIR, cửa sổ trượt, detrend, RMS và kurtosis, FFT, band energy. Có mô phỏng để tự chỉnh từng tham số.">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script src="../assets/js/main.js"></script>
+  <style>
+    /* CSS riêng của bài này */
+    .post figure.wide > table { margin: 0; }
+    .post .eq { margin: 0 0 1.4em; padding: .55rem 0 .55rem 1rem; border-left: 2px solid var(--accent); font: .9375rem/1.7 var(--mono); overflow-x: auto; }
+
+    .sim-controls { flex-direction: column; align-items: stretch; gap: 0; }
+    .ctl-group { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 0; border-top: 1px solid var(--border); }
+    .ctl-group:first-child { padding-top: 0; border-top: 0; }
+    .ctl-title { flex: 1 0 100%; font: .75rem/1.4 var(--mono); color: var(--text); }
+    @media (min-width: 40.01rem) { .sim-controls input[type="range"] { width: 6.5rem; } }
+    .sim-controls output { min-width: 4.25rem; color: var(--text); font-variant-numeric: tabular-nums; }
+    .sim-controls .check { cursor: pointer; }
+    .sim-controls .check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent); }
+    .sim canvas + canvas { margin-top: .75rem; border-top: 1px solid var(--border); padding-top: .75rem; }
+    #cv-time { height: 13.5rem; }
+    #cv-frame { height: 8.5rem; }
+    #cv-spec { height: 15rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 20px; font: .75rem/1.4 var(--mono); color: var(--muted); margin-top: 12px; }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c); }
+    .sim .dsp-status { margin: .75rem 0 0; font: .8125rem/1.55 var(--mono); color: var(--muted); }
+    @media (max-width: 40rem) {
+      .sim-controls label.check { flex: 1 1 calc(50% - .75rem); justify-content: flex-start; }
+      #cv-time { height: 12rem; }
+      #cv-spec { height: 14rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="container post">
+      <h1>Pipeline DSP cho dữ liệu cảm biến: từ mẫu thô đến đặc trưng</h1>
+      <p class="post-meta">
+        <time datetime="2026-11-01">2026-11-01</time>
+        <span>#dsp</span>
+        <span>#xử lý tín hiệu</span>
+        <span>#embedded</span>
+        <span>#simulation</span>
+      </p>
+
+      <p>Cảm biến rung, gia tốc, âm thanh hay dòng điện đều cho ra cùng một thứ: một dòng số lấy mẫu đều đặn. Bài này đi qua chuỗi bước mà gần như dự án nhúng nào cũng phải làm để rút từ dòng số đó vài con số có nghĩa, kèm một trình mô phỏng để bạn tự chỉnh từng tham số và nhìn kết quả.</p>
+
+      <section class="sim" aria-label="Mô phỏng pipeline DSP, Fs = 100 Hz">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Tín hiệu vào">
+            <span class="ctl-title">Tín hiệu vào (lấy mẫu ở Fs = 100 Hz)</span>
+            <label>Tone 1 <input id="f1" type="range" min="0.5" max="80" step="0.1" value="6.4"><output id="f1o" for="f1"></output></label>
+            <label>Tone 2 <input id="f2" type="range" min="0.5" max="80" step="0.5" value="37"><output id="f2o" for="f2"></output></label>
+            <label>Biên độ tone 2 <input id="a2" type="range" min="0" max="1" step="0.05" value="0.4"><output id="a2o" for="a2"></output></label>
+            <label>Nhiễu <input id="noise" type="range" min="0" max="0.6" step="0.01" value="0.15"><output id="noiseo" for="noise"></output></label>
+            <label class="check"><input id="dc" type="checkbox" checked> Thành phần DC</label>
+            <label class="check"><input id="hit" type="checkbox"> Va đập</label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Xử lý">
+            <span class="ctl-title">Xử lý</span>
+            <label class="check"><input id="fir" type="checkbox" checked> Lọc FIR</label>
+            <label>Tần số cắt <input id="fc" type="range" min="2" max="45" step="1" value="20"><output id="fco" for="fc"></output></label>
+            <label>Số tap <input id="taps" type="range" min="4" max="32" step="2" value="16"><output id="tapso" for="taps"></output></label>
+            <label>Cửa sổ N
+              <select id="n">
+                <option value="64">64 mẫu</option>
+                <option value="128" selected>128 mẫu</option>
+                <option value="256">256 mẫu</option>
+              </select>
+            </label>
+            <label>Chồng lấp
+              <select id="overlap">
+                <option value="0">0%</option>
+                <option value="0.5" selected>50%</option>
+                <option value="0.75">75%</option>
+              </select>
+            </label>
+            <label>Hàm cửa sổ
+              <select id="win">
+                <option value="rect">Chữ nhật</option>
+                <option value="hann" selected>Hann</option>
+                <option value="hamming">Hamming</option>
+                <option value="blackman">Blackman</option>
+              </select>
+            </label>
+            <label class="check"><input id="detrend" type="checkbox" checked> Detrend</label>
+            <label class="check"><input id="db" type="checkbox" checked> Trục dB</label>
+          </div>
+          <div class="ctl-group">
+            <div class="sim-actions">
+              <button class="btn primary" id="run" type="button">Chạy</button>
+              <button class="btn" id="step" type="button">Bước</button>
+              <button class="btn" id="reset" type="button">Đặt lại</button>
+            </div>
+            <label>Tốc độ <input id="speed" type="range" min="1" max="8" step="1" value="2"><output id="speedo" for="speed"></output></label>
+          </div>
+        </div>
+
+        <canvas id="cv-time" role="img" aria-label="Tín hiệu theo thời gian: mẫu thô, mẫu sau lọc FIR và các cửa sổ phân tích"></canvas>
+        <canvas id="cv-frame" role="img" aria-label="Khung đang phân tích sau khi detrend và nhân cửa sổ, đây là đầu vào của FFT"></canvas>
+        <canvas id="cv-spec" role="img" aria-label="Phổ công suất của khung, với tần số trội và bốn dải năng lượng"></canvas>
+
+        <div class="legend">
+          <span style="--c: var(--faint)">thô, phổ trước lọc</span>
+          <span style="--c: var(--indigo)">sau FIR, khung đang phân tích</span>
+          <span style="--c: var(--accent)">đỉnh trội</span>
+          <span style="--c: var(--muted)">đáp ứng FIR (nét đứt)</span>
+        </div>
+        <div id="readout" aria-live="polite">
+          <div class="sim-stats">
+            <span>RMS: <b id="s-rms">–</b></span>
+            <span>Peak: <b id="s-peak">–</b></span>
+            <span>Crest: <b id="s-crest">–</b></span>
+            <span>Kurtosis: <b id="s-kurt">–</b></span>
+            <span>DC: <b id="s-mean">–</b></span>
+            <span>f trội: <b id="s-freq">–</b></span>
+            <span>B1–B4: <b id="s-bands">–</b></span>
+            <span>Trễ FIR: <b id="s-delay">–</b></span>
+          </div>
+          <p class="dsp-status" id="status"></p>
+        </div>
+      </section>
+
+      <p>Ba khung vẽ ba điểm của pipeline. Trên cùng là tín hiệu theo thời gian: xám là mẫu thô, xanh là sau FIR, thanh đặc phía trên là khung đang phân tích và thanh nét đứt là khung trước đó. Ở giữa là khung đưa vào FFT, dưới cùng là phổ công suất chia thành bốn dải. Vài thí nghiệm nên thử, mỗi cái ứng với một phần bên dưới:</p>
+      <ol>
+        <li>Đổi hàm cửa sổ từ Hann sang Chữ nhật, bật trục dB, và nhìn "chân" của đỉnh phổ nở ra: đó là rò rỉ phổ (<a href="#tan-so">miền tần số</a>).</li>
+        <li>Tắt Detrend khi đang dùng Hann: RMS nhảy từ khoảng 0.7 lên khoảng 3, còn f trội tụt về dưới 1 Hz (<a href="#khu-dc">detrend</a>).</li>
+        <li>Kéo Tone 2 lên 70 Hz: đường xám trong phổ cho thấy đỉnh nằm ở 30 Hz, không phải 70 Hz (<a href="#lay-mau">lấy mẫu</a>).</li>
+        <li>Bật Va đập rồi bấm Bước vài lần: ở khung chứa trọn một cú va đập, RMS chỉ nhích lên chừng 20% nhưng kurtosis nhảy từ 1.5 lên 4 đến 7; khung chỉ thấy đuôi cú va đập thì kurtosis thấp hơn hẳn (<a href="#thoi-gian">đặc trưng miền thời gian</a>, <a href="#cua-so">cửa sổ trượt</a>).</li>
+        <li>Kéo số tap xuống 6 rồi lên 32 và nhìn đường nét đứt đổi độ dốc cùng độ trễ của đường xanh (<a href="#bo-loc-fir">bộ lọc FIR</a>).</li>
+      </ol>
+
+      <h2 id="tong-quan">Bức tranh toàn cảnh</h2>
+      <p>Dữ liệu thô vừa nhiều vừa nhiễu: vài trăm mẫu mỗi giây, trong đó rung động thật lẫn với nhiễu điện, trôi baseline và trọng lực. Pipeline DSP là chuỗi khối biến dòng đó thành một vector vài chục byte, đủ nhỏ để một luật ngưỡng hay một mạng nơ-ron nhỏ ra quyết định.</p>
+
+      <figure class="diagram">
+        <figcaption>Các khối của pipeline và dữ liệu đi qua chúng</figcaption>
+        <svg viewBox="0 0 680 370" role="img" aria-labelledby="pl-t pl-d">
+          <title id="pl-t">Sơ đồ khối của pipeline DSP cho dữ liệu cảm biến</title>
+          <desc id="pl-d">Cảm biến, kèm bộ lọc chống alias, được lấy mẫu ở tần số Fs. Mỗi mẫu đi vào bộ lọc FIR rồi vào cửa sổ trượt N mẫu, hop H, có detrend. Từ đó dữ liệu tách thành hai nhánh song song: nhánh miền thời gian tính RMS, Peak, Variance, Kurtosis và Crest; nhánh miền tần số nhân cửa sổ Hann, chạy FFT rồi rút tần số trội và band energy. Hai nhánh gộp thành vector đặc trưng khoảng mười số có bố cục cố định, đưa vào bước quyết định bằng ngưỡng hoặc mô hình ML.</desc>
+          <defs>
+            <marker id="pl-head" class="head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+          </defs>
+
+          <rect class="box" x="8" y="14" width="190" height="56"/>
+          <rect class="box solid" x="8" y="14" width="190" height="26"/>
+          <text class="inv" x="18" y="32">1 · Cảm biến</text>
+          <text class="sm muted" x="18" y="60">+ lọc chống alias</text>
+
+          <rect class="box" x="245" y="14" width="190" height="56"/>
+          <rect class="box solid" x="245" y="14" width="190" height="26"/>
+          <text class="inv" x="255" y="32">2 · Lấy mẫu</text>
+          <text class="sm muted" x="255" y="60">tần số Fs, ADC</text>
+
+          <rect class="box" x="482" y="14" width="190" height="56"/>
+          <rect class="box solid" x="482" y="14" width="190" height="26"/>
+          <text class="inv" x="492" y="32">3 · Lọc FIR</text>
+          <text class="sm muted" x="492" y="60">L tap, trễ (L−1)/2 mẫu</text>
+
+          <path class="line" d="M198 42H245" marker-end="url(#pl-head)"/>
+          <path class="line" d="M435 42H482" marker-end="url(#pl-head)"/>
+
+          <path class="line" d="M577 70V111H103V150" marker-end="url(#pl-head)"/>
+          <text class="sm muted" x="340" y="102" text-anchor="middle">mỗi mẫu đã lọc vào ring buffer</text>
+
+          <rect class="box" x="8" y="150" width="190" height="92"/>
+          <rect class="box solid" x="8" y="150" width="190" height="26"/>
+          <text class="inv" x="18" y="168">4 · Cửa sổ trượt</text>
+          <text class="sm muted" x="18" y="196">N mẫu, hop H</text>
+          <text class="sm muted" x="18" y="214">chồng lấp 1 − H/N</text>
+          <text class="sm muted" x="18" y="232">detrend: trừ trung bình</text>
+
+          <rect class="box" x="245" y="122" width="190" height="74"/>
+          <rect class="box solid" x="245" y="122" width="190" height="26"/>
+          <text class="inv" x="255" y="140">5a · Miền thời gian</text>
+          <text class="sm muted" x="255" y="168">RMS · Peak · Variance</text>
+          <text class="sm muted" x="255" y="186">Kurtosis · Crest</text>
+
+          <rect class="box" x="245" y="214" width="190" height="92"/>
+          <rect class="box solid" x="245" y="214" width="190" height="26"/>
+          <text class="inv" x="255" y="232">5b · Miền tần số</text>
+          <text class="sm muted" x="255" y="260">× cửa sổ Hann</text>
+          <text class="sm muted" x="255" y="278">FFT → công suất</text>
+          <text class="sm muted" x="255" y="296">f trội · band energy</text>
+
+          <path class="line" d="M198 196H221V159H245" marker-end="url(#pl-head)"/>
+          <path class="line" d="M198 196H221V260H245" marker-end="url(#pl-head)"/>
+
+          <rect class="box key" x="482" y="150" width="190" height="92"/>
+          <rect class="box solid" x="482" y="150" width="190" height="26"/>
+          <text class="inv" x="492" y="168">6 · Vector đặc trưng</text>
+          <text class="sm muted" x="492" y="196">~10 số, bố cục cố định</text>
+          <text class="sm muted" x="492" y="214">Q-format ghi trong tên</text>
+          <text class="sm muted" x="492" y="232">kèm số thứ tự khung</text>
+
+          <path class="line" d="M435 159H459V196H482" marker-end="url(#pl-head)"/>
+          <path class="line" d="M435 260H459V196H482" marker-end="url(#pl-head)"/>
+
+          <rect class="box" x="482" y="300" width="190" height="56"/>
+          <rect class="box solid" x="482" y="300" width="190" height="26"/>
+          <text class="inv" x="492" y="318">7 · Quyết định</text>
+          <text class="sm muted" x="492" y="346">ngưỡng hoặc mô hình ML</text>
+          <path class="line" d="M577 242V300" marker-end="url(#pl-head)"/>
+
+          <text class="sm muted" x="8" y="340">Dữ liệu co lại: Fs mẫu/giây → N mẫu/khung → ~10 số/khung</text>
+        </svg>
+      </figure>
+
+      <p>Mỗi tầng co dữ liệu lại. Đây là nén có tổn hao và có chủ đích: bạn bỏ dạng sóng và giữ những con số trả lời được câu hỏi "máy đang rung mạnh cỡ nào, ở tần số nào, có giật cục không". Ba con số trong pipeline hay bị gộp nhầm vì cùng xuất hiện ở đây, nhưng chúng hoàn toàn độc lập:</p>
+      <table>
+        <thead><tr><th>Con số</th><th>Trả lời câu hỏi</th><th>Thời gian tương ứng</th></tr></thead>
+        <tbody>
+          <tr><td>Số tap <code>L</code></td><td>FIR nhìn lại bao nhiêu mẫu để lọc <em>một</em> mẫu?</td><td>trễ <code>(L−1)/2</code> mẫu</td></tr>
+          <tr><td>Cửa sổ <code>N</code></td><td>Một khung gộp bao nhiêu mẫu đã lọc?</td><td>quan sát <code>N/Fs</code> giây</td></tr>
+          <tr><td>Hop <code>H</code></td><td>Cứ bao nhiêu mẫu mới thì tính lại một khung?</td><td>kết quả mới mỗi <code>H/Fs</code> giây</td></tr>
+        </tbody>
+      </table>
+      <p>Đổi số tap không buộc phải đổi N, và ngược lại. Các phần sau đi theo đúng thứ tự khối trong sơ đồ.</p>
+
+      <h2 id="lay-mau">Lấy mẫu: Nyquist và aliasing</h2>
+      <p>Lấy mẫu ở tần số <code>Fs</code> chỉ giữ được thông tin tới <code>Fs/2</code>, gọi là tần số Nyquist. Tần số cao hơn không biến mất: nó gập về <code>|f − k·Fs|</code> (k là số nguyên gần nhất) và trộn lẫn với tần số thật. Với Fs = 100 Hz, sóng 70 Hz và sóng 30 Hz cho ra chuỗi mẫu giống hệt nhau:</p>
+      <table>
+        <thead><tr><th>n</th><th>cos(2π · 70 · n / 100)</th><th>cos(2π · 30 · n / 100)</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>1.000</td><td>1.000</td></tr>
+          <tr><td>1</td><td>−0.309</td><td>−0.309</td></tr>
+          <tr><td>2</td><td>−0.809</td><td>−0.809</td></tr>
+          <tr><td>3</td><td>0.809</td><td>0.809</td></tr>
+          <tr><td>4</td><td>0.309</td><td>0.309</td></tr>
+        </tbody>
+      </table>
+      <p>Từ chuỗi số đã lấy mẫu, không có cách nào biết đỉnh 30 Hz là rung thật ở 30 Hz hay cộng hưởng ở 70 Hz. Thông tin mất đúng lúc lấy mẫu, nên mọi bộ lọc số đứng sau (FIR, FFT) đều bó tay. Cách duy nhất là chặn năng lượng trên <code>Fs/2</code> <b>trước</b> khâu lấy mẫu: bộ lọc analog đặt trước ADC, hoặc bộ lọc số trong cảm biến (thường gọi là DLPF) chạy ở tốc độ mẫu cao rồi mới giảm xuống Fs. Bộ lọc thực không dốc tuyệt đối, nên Fs thường chọn từ 2.5 lần tần số cao nhất cần quan sát trở lên.</p>
+
+      <h2 id="so-nguyen">Số nguyên thay cho dấu phẩy động</h2>
+      <p>Trên MCU không có FPU, hay trong FPGA, phép nhân <code>float32</code> đắt hơn phép nhân số nguyên rất nhiều: một phép nhân 16 bit vừa khít một khối DSP có sẵn trên chip, còn dấu phẩy động cần cả mảng logic để chuẩn hoá số mũ và làm tròn. Số nguyên còn cho kết quả tất định đến từng bit, nên bạn chạy cùng thuật toán trên PC rồi so với thiết bị được (xem <a href="#kiem-chung">phần kiểm chứng</a>). Cái giá là bạn phải tự quản lý dấu phẩy bằng Q-format.</p>
+      <p>Q-format <code>Q(I).(F)</code> lưu giá trị thật dưới dạng số nguyên: <code>giá trị = raw / 2<sup>F</sup></code>. Hệ số FIR thường dùng Q1.15 (1 bit dấu, 15 bit phân số): <code>raw = 13190</code> nghĩa là <code>13190 / 32768 ≈ 0.4026</code>. Bốn quy tắc sống còn:</p>
+      <ol>
+        <li><b>Nhân xong phải dịch bit.</b> Nhân hai số Q.15 ra kết quả Q.30, nên phải dịch phải 15 bit để về lại Q.15. Với 0.5 × 0.5: <code>16384 × 16384 = 268 435 456</code>, dịch phải 15 bit được <code>8192</code>, tức 0.25. Quên dịch không gây lỗi biên dịch hay crash, chỉ ra con số sai.</li>
+        <li><b>Làm tròn, đừng cắt.</b> Dịch phải thuần tuý luôn làm tròn xuống, lệch trung bình nửa đơn vị cuối ở mỗi lần dịch. Độ lệch này luôn về cùng một phía nên không triệt tiêu theo thời gian mà thành bias hệ thống; nếu dịch từng tích trước khi cộng, nó còn nhân lên theo số tap. Cộng nửa đơn vị (<code>1 &lt;&lt; 14</code>) trước khi dịch, và tốt nhất là cộng dồn đủ rộng rồi chỉ làm tròn một lần ở cuối, như <code>fir_q15</code> bên dưới.</li>
+        <li><b>Accumulator phải rộng hơn tích.</b> Cộng L tích 16 × 16 bit cần tới <code>16 + 16 + ⌈log₂L⌉</code> bit trong trường hợp xấu nhất (36 bit khi L = 16), nên dùng <code>int64</code>. Với hệ số đã chuẩn hoá (Σ|h| chỉ cỡ 1 đến 1.5), 32 bit đôi khi vẫn đủ, nhưng chỉ khi bạn chứng minh được; <code>int64</code> là cách khỏi phải chứng minh.</li>
+        <li><b>Bão hoà thay vì quấn vòng.</b> Vượt giới hạn thì ghim ở giá trị lớn nhất hoặc nhỏ nhất. Tràn quấn vòng biến +32767 thành −32768 mà không báo gì.</li>
+      </ol>
+      <pre><code class="language-c" data-from="#fixed-code" data-filename="fixed_point.h"></code></pre>
+      <div class="note">
+        <p>Lỗi Q-format hiếm khi báo lỗi: compiler không biết quy ước sống trong đầu người viết. Cách bắt hiệu quả nhất là so với bản dấu phẩy động tham chiếu trên cùng một tín hiệu, như mô tả ở phần kiểm chứng. Các ví dụ JavaScript trong bài viết bằng dấu phẩy động cho dễ đọc; thuật toán giữ nguyên khi chuyển sang số nguyên, chỉ cần thêm việc quản lý Q-format theo bốn quy tắc trên.</p>
+      </div>
+
+      <h2 id="bo-loc-fir">Bộ lọc FIR</h2>
+      <p>FIR tính mỗi mẫu ra từ <code>L</code> mẫu vào gần nhất, mỗi mẫu nhân một hệ số (tap):</p>
+      <p class="eq">y[n] = Σ h[k] · x[n − k],   k = 0 … L−1</p>
+      <p>FIR không có hồi tiếp nên luôn ổn định, và nếu hệ số đối xứng (<code>h[k] = h[L−1−k]</code>) thì pha tuyến tính: mọi tần số bị trễ cùng một lượng nên dạng sóng không méo. Cái giá là cần nhiều tap hơn bộ lọc IIR cho cùng độ dốc.</p>
+      <p>Hệ số được thiết kế <b>offline, một lần</b>, bằng windowed-sinc. Bộ lọc thông thấp lý tưởng có đáp ứng xung là hàm sinc kéo dài vô hạn. Cắt cụt thô thành L số gây gợn Gibbs: suy hao stopband không vượt quá khoảng 21 dB dù tăng L bao nhiêu. Nhân sinc với cửa sổ Hamming (giảm êm về hai đầu) nâng suy hao lên khoảng 53 dB, đổi lại dải chuyển tiếp rộng hơn, cỡ <code>3.3·Fs/L</code> Hz. Quy trình thiết kế:</p>
+      <ol>
+        <li>Chốt Fs, tần số cắt <code>fc</code>, độ rộng dải chuyển tiếp <code>Δf</code> và độ suy hao cần có.</li>
+        <li>Ước lượng số tap. Với Hamming, <code>L ≈ 3.3·Fs/Δf</code>: Fs = 100 Hz và cần chuyển từ giữ sang chặn trong 10 Hz thì L ≈ 33. Thiết kế tối ưu (equiripple, <code>scipy.signal.remez</code>) cần ít tap hơn cho cùng yêu cầu.</li>
+        <li>Tính <code>h[n] = 2f·sinc(2f·(n − (L−1)/2)) · w[n]</code> với <code>f = fc/Fs</code>, rồi chia cho Σh để độ lợi DC đúng bằng 1. Hàm <code>scipy.signal.firwin(L, fc, fs=Fs)</code> làm đúng việc này.</li>
+        <li>Kiểm tra đáp ứng tần số bằng dấu phẩy động.</li>
+        <li>Lượng tử hoá sang Q1.15, chỉnh tap giữa để tổng đúng bằng 2<sup>15</sup>, rồi <b>kiểm tra lại đáp ứng</b>: sai số làm tròn đủ để làm đổi suy hao stopband.</li>
+      </ol>
+      <p>Bộ lọc đối xứng trễ tín hiệu đúng <code>(L−1)/2</code> mẫu: 16 tap ở 100 Hz là 7.5 mẫu, tức 75 ms. Trong mô phỏng, đường xanh luôn chậm hơn đường xám đúng chừng đó. Độ trễ vật lý này tách biệt với thời gian quan sát và chu kỳ cập nhật ở phần cửa sổ.</p>
+      <p>Một chi tiết hay sai: lịch sử <code>L−1</code> mẫu của FIR phải sống xuyên qua các khung và <b>không reset</b> ở đầu khung. Reset thì những mẫu đầu mỗi khung được lọc theo lịch sử giả toàn số 0, tạo transient giả đúng ở chỗ RMS và kurtosis đang đo.</p>
+      <pre><code data-from="#fir-code" data-filename="fir.js"></code></pre>
+
+      <h2 id="cua-so">Cửa sổ trượt: N, hop và chồng lấp</h2>
+      <p>RMS, kurtosis và FFT đều cần một đoạn tín hiệu, không phải một mẫu. Pipeline giữ N mẫu đã lọc gần nhất trong ring buffer (bộ nhớ cố định, mẫu mới ghi đè mẫu cũ nhất) và tính lại một khung mỗi H mẫu mới. Tỉ lệ chồng lấp là <code>1 − H/N</code>. Ring buffer này khác ring buffer lịch sử L mẫu của FIR: một cái phục vụ bộ lọc, một cái gom khung.</p>
+      <p>Chồng lấp cần thiết vì sự kiện không chờ ranh giới khung. Giả sử một cú va đập dài 8 mẫu rơi đúng chỗ hai khung liền kề gặp nhau: mỗi khung chỉ thấy một nửa, và kurtosis của từng nửa thấp hơn nhiều so với cả cú va đập. Với chồng lấp 50% luôn có một khung chứa trọn nó.</p>
+      <p>Kích thước N là phép đánh đổi giữa hai thứ, nên đừng chọn tuỳ ý:</p>
+      <table>
+        <thead><tr><th>N (mẫu)</th><th>Độ phân giải Δf = Fs/N</th><th>Thời gian quan sát N/Fs</th></tr></thead>
+        <tbody>
+          <tr><td>64</td><td>1.5625 Hz</td><td>0.64 s</td></tr>
+          <tr><td>128</td><td>0.78125 Hz</td><td>1.28 s</td></tr>
+          <tr><td>256</td><td>0.390625 Hz</td><td>2.56 s</td></tr>
+        </tbody>
+      </table>
+      <p>(Bảng tính cho Fs = 100 Hz.) N lớn phân biệt được hai tần số gần nhau hơn nhưng phản ứng chậm hơn và giả định tín hiệu ổn định lâu hơn. FFT radix-2 cần N là luỹ thừa của 2. Số khung từ T mẫu là <code>(T − N)/H + 1</code>: 640 mẫu với N = 128, H = 64 cho 9 khung.</p>
+
+      <h2 id="khu-dc">Detrend trước khi đo</h2>
+      <p>Cảm biến hiếm khi dao động quanh 0: gia tốc kế có trọng lực, cảm biến dòng có offset. Thành phần hằng số này không mang thông tin về rung, nhưng lại chi phối mọi phép đo vì <code>mean(x²) = mean(x)² + variance</code>, tức là <code>RMS² = DC² + RMS<sub>AC</sub>²</code>. Với DC = 1000, rung hình sin biên độ 10 cho RMS = 1000.025, còn biên độ 100 chỉ cho 1002.5: rung mạnh gấp mười lần mà RMS nhích 0.25%, và trong số nguyên phần nhích đó dễ chìm dưới đơn vị cuối.</p>
+      <p>Trong phổ, DC là một đỉnh khổng lồ ở bin 0, và sidelobe của cửa sổ rải nó sang các bin lân cận (thử tắt Detrend khi dùng Hann). Cách đơn giản nhất là trừ trung bình của chính khung, đủ tốt khi baseline gần như không đổi trong <code>N/Fs</code> giây. Nếu baseline trôi: trừ đường thẳng khớp nhất theo bình phương tối thiểu (linear detrend), hoặc dùng bộ lọc thông cao chạy liên tục theo từng mẫu. Mọi đặc trưng ở các phần sau đều tính trên khung đã detrend.</p>
+
+      <h2 id="thoi-gian">Đặc trưng miền thời gian</h2>
+      <p>Gọi <code>d</code> là khung đã detrend gồm N mẫu. Năm con số thường dùng:</p>
+      <table>
+        <thead><tr><th>Đặc trưng</th><th>Công thức</th><th>Cho biết</th></tr></thead>
+        <tbody>
+          <tr><td>RMS</td><td><code>√mean(d²)</code></td><td>cường độ rung trung bình</td></tr>
+          <tr><td>Peak</td><td><code>max |d|</code></td><td>biên độ đỉnh tức thời</td></tr>
+          <tr><td>Crest factor</td><td><code>Peak / RMS</code></td><td>đỉnh nổi lên so với mức trung bình (sóng sin: 1.41)</td></tr>
+          <tr><td>Variance</td><td><code>mean(d²) = RMS²</code></td><td>cùng thông tin với RMS, khỏi khai căn</td></tr>
+          <tr><td>Kurtosis</td><td><code>N·Σd⁴ / (Σd²)²</code></td><td>độ "nhọn": có xung giật cục hay không</td></tr>
+        </tbody>
+      </table>
+      <p>RMS và variance chỉ đo cường độ trung bình, nên hai tín hiệu rất khác nhau có thể giống hệt nhau ở hai số này. Hai chuỗi 8 mẫu dưới đây cùng có mean = 0 và variance = 2.5, nhưng B có hai lần "giật" (dấu hiệu quen thuộc của va đập cơ khí hay ổ bi hỏng) còn A rải đều:</p>
+      <table>
+        <thead><tr><th></th><th>Chuỗi</th><th>Variance</th><th>Kurtosis</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td><code>−2 −1 1 2 −2 −1 1 2</code></td><td>2.5</td><td>1.36</td></tr>
+          <tr><td>B</td><td><code>−3 −1 0 0 0 0 1 3</code></td><td>2.5</td><td>3.28</td></tr>
+        </tbody>
+      </table>
+      <p>Kurtosis là con số duy nhất trong nhóm này tách được hai chuỗi. Mốc tham chiếu theo định nghĩa không trừ 3: sóng sin 1.5, nhiễu Gauss 3, tín hiệu có xung giật cục lớn hơn 3. Cẩn thận khi dùng thư viện: <code>scipy.stats.kurtosis</code> mặc định trả về <i>excess</i> kurtosis, đã trừ 3.</p>
+      <p>Ba mẹo khi cài đặt bằng số nguyên. Khai căn nguyên (cắt xuống) cho RMS, hoặc tránh khai căn bằng cách so variance với bình phương ngưỡng. <code>d⁴</code> dễ tràn <code>int64</code> (d cỡ 3·10⁴ thì d⁴ đã cỡ 10¹⁸), nên co mọi giá trị đi cùng một số bit trước khi luỹ thừa; tỉ số kurtosis không đổi khi co giãn tuyến tính. Và dùng lại tổng d² đã có từ RMS thay vì tính lại.</p>
+      <pre><code data-from="#features-code" data-filename="features.js"></code></pre>
+
+      <h2 id="tan-so">Miền tần số: cửa sổ Hann và FFT</h2>
+      <p>RMS cho biết rung mạnh hay yếu, không cho biết rung nhanh hay chậm. Rung ở 3 Hz và ở 35 Hz có ý nghĩa vật lý khác hẳn dù RMS giống nhau. FFT trả lời câu hỏi còn thiếu.</p>
+      <p>Trực giác của DFT: với mỗi tần số ứng viên, "ướm" khung lên một sóng cos hoặc sin ở đúng tần số đó, nhân từng cặp mẫu rồi cộng dồn. Khớp thì các tích cùng dấu và tổng lớn; không khớp thì dương âm triệt tiêu và tổng gần 0. FFT cho đúng kết quả đó với khoảng <code>N·log₂N</code> phép tính thay vì <code>N²</code> (N = 128: 896 so với 16 384, nhanh hơn 18 lần) bằng cách chia đôi liên tục rồi ghép lại bằng phép "bướm". Mỗi bin ra là một số phức, và công suất là <code>re² + im²</code>.</p>
+      <p>FFT ngầm coi khung là một chu kỳ lặp lại mãi. Nếu tần số thật không rơi đúng một bin (hầu như luôn vậy), đầu và cuối khung không khớp nhau, tạo bước nhảy giả và năng lượng rò sang các bin lân cận. Nhân khung với một cửa sổ giảm dần về 0 ở hai đầu làm giảm rò rỉ, đổi lại đỉnh phổ rộng ra:</p>
+      <figure class="wide">
+        <table>
+          <thead><tr><th>Cửa sổ</th><th>Thuỳ chính (bin)</th><th>Sidelobe cao nhất</th><th>Dùng khi</th></tr></thead>
+          <tbody>
+            <tr><td>Chữ nhật</td><td>2</td><td>−13 dB</td><td>khung chứa đúng số nguyên chu kỳ, hoặc xung ngắn nằm gọn trong khung</td></tr>
+            <tr><td>Hann</td><td>4</td><td>−31 dB</td><td>lựa chọn mặc định cho phân tích rung động</td></tr>
+            <tr><td>Hamming</td><td>4</td><td>−43 dB</td><td>cần sidelobe gần đỉnh thấp hơn Hann</td></tr>
+            <tr><td>Blackman</td><td>6</td><td>−58 dB</td><td>cần dải động lớn, chấp nhận độ phân giải kém hơn</td></tr>
+          </tbody>
+        </table>
+      </figure>
+      <p>Hann và Hamming cùng họ cosine nhưng làm hai việc ở hai thời điểm khác nhau: Hamming dùng một lần lúc thiết kế FIR, còn cửa sổ phân tích chạy ở mỗi khung. Dạng cũng khác chút: phân tích phổ dùng dạng tuần hoàn (chia cho <code>N</code>), thiết kế FIR dùng dạng đối xứng (chia cho <code>L−1</code>). Và chỉ nhánh FFT được nhân cửa sổ: RMS và kurtosis dùng khung detrend nguyên vẹn, nhân Hann vào đó chỉ làm biên độ co lại mà không có lý do vật lý.</p>
+      <p>Bin <code>k</code> ứng với tần số <code>f = k·Fs/N</code>, và với tín hiệu thực chỉ <code>N/2 + 1</code> bin đầu là độc lập (tới Nyquist). Không cần tăng N để biết đỉnh chính xác hơn Δf: nội suy parabol qua bin đỉnh và hai bin kề cho sai số nhỏ hơn nhiều Δf, và mô phỏng hiển thị f trội theo cách đó. Khi tìm đỉnh nên bỏ bin 0 và giới hạn trong dải thực sự cần quan sát.</p>
+      <p>Bản số nguyên thường dùng bảng twiddle Q1.15 tính sẵn, ba vòng lặp lồng nhau thay cho đệ quy (công cụ HLS cần số vòng biết trước), và chia đôi có làm tròn sau mỗi tầng để không tràn: <code>log₂N</code> tầng co tổng cộng 1/N.</p>
+      <pre><code data-from="#fft-code" data-filename="fft.js"></code></pre>
+
+      <h2 id="band-energy">Band energy: phổ thu gọn</h2>
+      <p>Một đỉnh trội chỉ là một con số. Lỗi cơ khí phức hợp rải năng lượng trên nhiều tần số, nên pipeline thường cộng công suất theo vài dải cố định: <code>B<sub>i</sub> = Σ P[k]</code> với k thuộc dải i. Bốn đến tám dải cho bộ phân loại một hình dạng phổ thô nhưng có kích thước cố định, không phụ thuộc N.</p>
+      <p>Mép dải nên theo ý nghĩa vật lý (tần số quay, các hài của nó, dải cộng hưởng đã biết) thay vì chia đều như trong mô phỏng. Bỏ bin 0 và mọi thứ ngoài dải cần quan sát để nhiễu ngoài dải không lọt vào kết quả. Nên giữ cả dạng tuyệt đối (cho biết mức độ nghiêm trọng) lẫn tỉ lệ <code>B<sub>i</sub> / ΣB</code> (cho biết hình dạng, không phụ thuộc biên độ).</p>
+
+      <h2 id="vector-dac-trung">Đóng gói thành vector đặc trưng</h2>
+      <p>Cuối pipeline là một cấu trúc có bố cục cố định. Tên trường ghi luôn Q-format để người đọc firmware khỏi phải đoán, và kích thước được kiểm tra ngay lúc biên dịch:</p>
+      <pre><code class="language-c">typedef struct {
+    uint32_t frame_seq;           /* thứ tự khung: phát hiện mất khung */
+    uint32_t window_end_seq;      /* số thứ tự mẫu cuối trong cửa sổ */
+    uint32_t rms_q24_8;
+    uint32_t peak_q24_8;
+    uint32_t variance_q32_0;
+    uint32_t kurtosis_q16_16;
+    uint32_t dom_freq_q16_16;
+    uint32_t dom_power_q32_0;
+    uint32_t band_energy_q32_0[4];
+} FeatureFrame;                   /* 12 x 4 = 48 byte */
+
+_Static_assert(sizeof(FeatureFrame) == 48, "bố cục phải cố định");</code></pre>
+      <p>Mười hai số nguyên 32 bit thay cho N mẫu: băng thông và tải CPU phía sau giảm mạnh. Từ đây có hai hướng ra quyết định. Luật ngưỡng (ví dụ RMS vượt mức cho phép) rẻ, dễ giải thích và nên luôn có làm lớp dự phòng. Mô hình ML nhỏ (MLP vài trăm tham số) nhận các trường này làm đầu vào, với hai lưu ý:</p>
+      <ul>
+        <li><b>Chuẩn hoá z-score</b> (<code>(x − μ) / σ</code>) trước khi vào mạng. Các trường lệch thang đo hàng trăm lần (RMS Q24.8 có thể cỡ hàng trăm, kurtosis Q16.16 cỡ hàng trăm nghìn); không chuẩn hoá thì trường lớn nhất chi phối neuron đầu tiên dù chẳng có lý do gì để nó quan trọng hơn.</li>
+        <li><b>Chia train/test theo phiên đo</b>, không theo khung. Hai khung liền nhau chia sẻ 50% mẫu: chia ngẫu nhiên theo khung thì hàng xóm của khung test nằm trong tập train, và độ chính xác đo được cao giả tạo.</li>
+      </ul>
+
+      <h2 id="kiem-chung">Chạy ở đâu và kiểm chứng thế nào</h2>
+      <p>Cùng một thuật toán có thể chạy trên MCU (thư viện như CMSIS-DSP đã có sẵn FIR và FFT Q15), trong FPGA (viết tay hoặc qua HLS) hay trên PC. Quyết định thường đến từ ngân sách thời gian: khung mới chỉ xuất hiện mỗi <code>H/Fs</code> giây (0.64 s trong ví dụ), tức hàng chục triệu chu kỳ ở xung nhịp 50 MHz, trong khi xử lý một khung chỉ cần cỡ vài nghìn chu kỳ. Thừa thời gian nhiều bậc độ lớn như vậy nghĩa là nên đổi tốc độ lấy diện tích: ép các phép nhân dùng chung vài bộ nhân thay vì để công cụ trải thành mạch song song. Trong một dự án đã đo, cấu hình mặc định dùng 69 khối DSP và trượt timing, còn cấu hình chia sẻ nhân dùng 25 khối và đạt timing.</p>
+      <p>Kiểm chứng theo ba lớp, trước khi chạm tới phần cứng:</p>
+      <ol>
+        <li><b>Mô hình tham chiếu dấu phẩy động</b> (numpy, scipy) định nghĩa đáp án đúng về mặt toán.</li>
+        <li><b>Mô hình bit-exact</b> của bản số nguyên (C++ hoặc Python, cùng thứ tự phép toán, cùng kiểu dữ liệu, cùng cách làm tròn). Chạy nó trên một tín hiệu tổng hợp có đáp án biết trước (ví dụ tổng vài sóng sin: đỉnh phổ phải nằm ở tần số đã cài) để sinh <i>golden vector</i>, và so với mô hình float để biết sai số lượng tử hoá có chấp nhận được không.</li>
+        <li><b>Thiết bị đích</b> (kết quả mô phỏng HLS, firmware chạy trên board) phải khớp golden từng bit, tự động trong CI.</li>
+      </ol>
+      <p>Dùng tín hiệu tổng hợp thay vì dữ liệu ngẫu nhiên vì nó cho biết "đúng" là gì: lệch một bit hay sai một Q-format đều lộ ngay, còn với dữ liệu thật bạn chỉ thấy kết quả "trông cũng hợp lý".</p>
+
+      <h2 id="loi">Những lỗi hay gặp</h2>
+      <figure class="wide">
+        <table>
+          <thead><tr><th>Lỗi</th><th>Triệu chứng</th><th>Cách tránh</th></tr></thead>
+          <tbody>
+            <tr><td>Không có bộ lọc chống alias</td><td>đỉnh phổ "ma" ở tần số không có thật</td><td>lọc trước khâu lấy mẫu; chọn Fs từ 2.5 lần tần số cao nhất trở lên</td></tr>
+            <tr><td>Tốc độ lấy mẫu thật khác Fs giả định</td><td>mọi tần số trong phổ lệch cùng một tỉ lệ</td><td>lấy mẫu bằng timer hoặc DMA, đánh số mẫu, đo Fs thực tế</td></tr>
+            <tr><td>Reset FIR ở đầu mỗi khung</td><td>transient giả đầu khung, kurtosis tăng vô cớ</td><td>chỉ reset lúc khởi động</td></tr>
+            <tr><td>Accumulator hẹp, cắt thay vì làm tròn</td><td>tràn quấn vòng; bias tăng dần theo thời gian</td><td><code>int64</code>, dịch bit có làm tròn, bão hoà</td></tr>
+            <tr><td>Quên detrend</td><td>RMS và kurtosis bị DC chi phối; f trội về gần 0 Hz</td><td>detrend trước mọi đặc trưng</td></tr>
+            <tr><td>Nhân cửa sổ vào cả nhánh RMS</td><td>RMS thấp hơn thực</td><td>chỉ nhánh FFT dùng cửa sổ</td></tr>
+            <tr><td>Nhầm định nghĩa kurtosis</td><td>ngưỡng lệch đúng 3 đơn vị</td><td>ghi rõ định nghĩa (có trừ 3 hay không) vào tài liệu</td></tr>
+            <tr><td>Đổi Q-format ở một bước, quên bước sau</td><td>kết quả sai theo hệ số 2<sup>k</sup>, không báo lỗi</td><td>golden vector chạy trong CI</td></tr>
+            <tr><td>Chia train/test theo khung chồng lấp</td><td>độ chính xác cao giả tạo</td><td>chia theo phiên đo</td></tr>
+          </tbody>
+        </table>
+      </figure>
+
+      <h2>File code của bài</h2>
+      <ul class="code-links">
+        <li><a data-from="#fixed-code" download="fixed_point.h">fixed_point.h <small>số học Q1.15, FIR số nguyên, căn nguyên</small></a></li>
+        <li><a data-from="#fir-code" download="fir.js">fir.js <small>thiết kế và chạy FIR, đáp ứng tần số</small></a></li>
+        <li><a data-from="#features-code" download="features.js">features.js <small>detrend, RMS, peak, kurtosis</small></a></li>
+        <li><a data-from="#fft-code" download="fft.js">fft.js <small>cửa sổ, FFT, tần số trội, band energy</small></a></li>
+        <li><a data-from="#sim-code" download="sim.js">sim.js <small>trình mô phỏng ở đầu bài</small></a></li>
+      </ul>
+    </article>
+  </main>
+
+  <!-- Code của bài: chạy thật ở đây, đồng thời là đoạn được hiển thị và tải về trong bài. -->
+  <script type="text/plain" id="fixed-code">
+/* Số học điểm cố định Q1.15 cho DSP trên MCU hoặc FPGA.
+ * Giá trị thật = raw / 2^15, nên 16384 là 0.5 và 32767 là gần 1.0.
+ */
+#include <stdint.h>
+
+/* Dịch phải 15 bit có làm tròn (nửa đơn vị làm tròn ra xa số 0), thay vì cắt xuống. */
+static inline int32_t round_shift_q15(int64_t v) {
+    return v >= 0 ?  (int32_t)(( v + (1 << 14)) >> 15)
+                  : -(int32_t)(((-v) + (1 << 14)) >> 15);
+}
+
+/* Ghim vào [-32768, 32767]: tràn thì dính biên chứ không quấn vòng. */
+static inline int16_t saturate_i16(int32_t v) {
+    return v > 32767 ? 32767 : v < -32768 ? -32768 : (int16_t)v;
+}
+
+/* Một mẫu ra của FIR. hist[0] là mẫu mới nhất, hist[k] là x[n-k], h[] là hệ số Q1.15.
+ * Cộng dồn vào int64, chỉ làm tròn và ghim MỘT lần ở cuối. */
+int16_t fir_q15(const int16_t *hist, const int16_t *h, int taps) {
+    int64_t acc = 0;
+    for (int k = 0; k < taps; k++) acc += (int32_t)h[k] * hist[k];
+    return saturate_i16((int32_t)round_shift_q15(acc));
+}
+
+/* Căn bậc hai số nguyên (cắt xuống), dùng cho RMS khi không có FPU. */
+uint32_t isqrt_u64(uint64_t v) {
+    uint64_t res = 0, bit = 1ULL << 62;
+    while (bit > v) bit >>= 2;
+    while (bit) {
+        if (v >= res + bit) { v -= res + bit; res = (res >> 1) + bit; }
+        else                { res >>= 1; }
+        bit >>= 2;
+    }
+    return (uint32_t)res;
+}
+  </script>
+  <script id="fir-code">
+/* Thiết kế và chạy bộ lọc FIR thông thấp. Viết bằng dấu phẩy động cho dễ đọc;
+ * bản số nguyên làm đúng các phép này bằng fir_q15() trong fixed_point.h. */
+(function (global) {
+  // Thiết kế offline bằng windowed-sinc + cửa sổ Hamming. fc là điểm -6 dB, tính bằng Hz.
+  function designLowpass(taps, fc, fs) {
+    const f = fc / fs;                       // chu kỳ trên mỗi mẫu
+    const mid = (taps - 1) / 2;              // tâm đối xứng (là x.5 khi số tap chẵn)
+    const h = new Float64Array(taps);
+    let sum = 0;
+    for (let n = 0; n < taps; n++) {
+      const x = n - mid;
+      const sinc = x === 0 ? 1 : Math.sin(2 * Math.PI * f * x) / (2 * Math.PI * f * x);
+      const hamming = 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / (taps - 1));
+      h[n] = 2 * f * sinc * hamming;
+      sum += h[n];
+    }
+    return h.map((v) => v / sum);            // chuẩn hoá: độ lợi DC đúng bằng 1
+  }
+
+  // y[n] = Σ h[k]·x[n-k]. Chỉ trả về những mẫu có đủ lịch sử, tức x.length - taps + 1 mẫu.
+  function firValid(h, x) {
+    const L = h.length;
+    const y = new Float64Array(x.length - L + 1);
+    for (let n = L - 1; n < x.length; n++) {
+      let acc = 0;
+      for (let k = 0; k < L; k++) acc += h[k] * x[n - k];
+      y[n - L + 1] = acc;
+    }
+    return y;
+  }
+
+  // |H(f)|² tại tần số f (Hz): bộ lọc làm yếu công suất ở f đi bao nhiêu lần.
+  function gainSq(h, f, fs) {
+    let re = 0, im = 0;
+    for (let k = 0; k < h.length; k++) {
+      const angle = (-2 * Math.PI * f * k) / fs;
+      re += h[k] * Math.cos(angle);
+      im += h[k] * Math.sin(angle);
+    }
+    return re * re + im * im;
+  }
+
+  global.DSP = Object.assign(global.DSP || {}, { designLowpass, firValid, gainSq });
+})(globalThis);
+  </script>
+  <script id="features-code">
+/* Đặc trưng miền thời gian. Đầu vào là một khung mẫu đã lọc. */
+(function (global) {
+  const mean = (x) => x.reduce((a, v) => a + v, 0) / x.length;
+
+  // Detrend: trừ trung bình của chính khung.
+  const detrend = (x) => {
+    const m = mean(x);
+    return Float64Array.from(x, (v) => v - m);
+  };
+
+  // x phải là khung đã detrend; khi đó variance = RMS².
+  function timeFeatures(x) {
+    const n = x.length;
+    let sum2 = 0, sum4 = 0, peak = 0;
+    for (const v of x) {
+      const v2 = v * v;
+      sum2 += v2;                            // dùng lại cho RMS, variance và kurtosis
+      sum4 += v2 * v2;
+      peak = Math.max(peak, Math.abs(v));
+    }
+    const variance = sum2 / n;
+    const rms = Math.sqrt(variance);
+    return {
+      rms,
+      peak,
+      variance,
+      crest: rms ? peak / rms : 0,
+      kurtosis: sum2 ? (n * sum4) / (sum2 * sum2) : 0,   // không trừ 3: sóng sin = 1.5, Gauss = 3
+    };
+  }
+
+  global.DSP = Object.assign(global.DSP || {}, { mean, detrend, timeFeatures });
+})(globalThis);
+  </script>
+  <script id="fft-code">
+/* Cửa sổ, FFT radix-2 và các đặc trưng miền tần số. */
+(function (global) {
+  const TAU = 2 * Math.PI;
+  const WINDOWS = {
+    rect: () => 1,
+    hann: (i, n) => 0.5 - 0.5 * Math.cos((TAU * i) / n),
+    hamming: (i, n) => 0.54 - 0.46 * Math.cos((TAU * i) / n),
+    blackman: (i, n) => 0.42 - 0.5 * Math.cos((TAU * i) / n) + 0.08 * Math.cos((2 * TAU * i) / n),
+  };
+  // Dạng tuần hoàn (chia cho n) dành cho phân tích phổ.
+  const makeWindow = (kind, n) => Float64Array.from({ length: n }, (_, i) => WINDOWS[kind](i, n));
+
+  // FFT tại chỗ, n là luỹ thừa của 2. Hai việc: xếp lại thứ tự (bit-reversal) để làm tại chỗ,
+  // rồi ghép từng tầng bằng phép bướm. Hệ số xoay (twiddle) e^(-j·2π/len) được nhân dồn.
+  function fft(re, im) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        [re[i], re[j]] = [re[j], re[i]];
+        [im[i], im[j]] = [im[j], im[i]];
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {                 // log2(n) tầng
+      const wr = Math.cos(-TAU / len), wi = Math.sin(-TAU / len);
+      for (let i = 0; i < n; i += len) {                     // từng khối
+        let cr = 1, ci = 0;
+        for (let k = 0; k < len / 2; k++) {                  // từng bướm
+          const a = i + k, b = a + len / 2;
+          const tr = re[b] * cr - im[b] * ci;
+          const ti = re[b] * ci + im[b] * cr;
+          re[b] = re[a] - tr; im[b] = im[a] - ti;
+          re[a] += tr;        im[a] += ti;
+          [cr, ci] = [cr * wr - ci * wi, cr * wi + ci * wr];
+        }
+      }
+    }
+  }
+
+  // Khung đã detrend × cửa sổ → FFT → công suất re²+im² của các bin 0..n/2.
+  function powerSpectrum(x, win) {
+    const n = x.length;
+    const re = new Float64Array(n), im = new Float64Array(n);
+    for (let i = 0; i < n; i++) re[i] = x[i] * win[i];
+    fft(re, im);
+    const power = new Float64Array(n / 2 + 1);
+    for (let k = 0; k <= n / 2; k++) power[k] = re[k] * re[k] + im[k] * im[k];
+    return power;
+  }
+
+  // Bin mạnh nhất (bỏ bin 0), rồi nội suy parabol trên log công suất
+  // để ra tần số chính xác hơn độ phân giải fs/n.
+  function dominantFrequency(power, fs) {
+    const n = (power.length - 1) * 2;
+    let k = 1;
+    for (let i = 2; i < power.length; i++) if (power[i] > power[k]) k = i;
+    let delta = 0;
+    if (k < power.length - 1) {
+      const a = Math.log(power[k - 1] + 1e-30);
+      const b = Math.log(power[k] + 1e-30);
+      const c = Math.log(power[k + 1] + 1e-30);
+      if (a - 2 * b + c < 0) delta = (0.5 * (a - c)) / (a - 2 * b + c);
+    }
+    return { bin: k, freq: ((k + delta) * fs) / n, power: power[k] };
+  }
+
+  // Cộng công suất theo dải tần. edges là các mép dải (Hz); bin 0 (DC) không tính.
+  function bandEnergy(power, edges, fs) {
+    const n = (power.length - 1) * 2;
+    const bands = new Float64Array(edges.length - 1);
+    for (let k = 1; k < power.length; k++) {
+      const f = (k * fs) / n;
+      bands[Math.min(bands.length - 1, edges.findLastIndex((e) => f >= e))] += power[k];
+    }
+    return bands;
+  }
+
+  global.DSP = Object.assign(global.DSP || {}, { makeWindow, fft, powerSpectrum, dominantFrequency, bandEnergy });
+})(globalThis);
+  </script>
+  <script id="sim-code">
+/* Trình mô phỏng pipeline: tạo tín hiệu, cho đi qua các khối trong fir.js, features.js, fft.js
+ * rồi vẽ ba khung nhìn (theo thời gian, đầu vào FFT, phổ). Mọi con số hiển thị đều do DSP.* tính ra. */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const FS = 100;                                  // tần số lấy mẫu của mô phỏng (Hz)
+  const TAU = 2 * Math.PI;
+  const HIT = 6;                                   // biên độ "va đập" so với biên độ tone 1
+  const EDGES = [0, FS / 8, FS / 4, (3 * FS) / 8, FS / 2];   // 4 dải chia đều từ 0 đến Nyquist
+  const WIN_NAMES = { rect: 'chữ nhật', hann: 'Hann', hamming: 'Hamming', blackman: 'Blackman' };
+  const DEFAULTS = {
+    f1: 6.4, f2: 37, a2: 0.4, noise: 0.15, dc: true, hit: false,
+    fir: true, fc: 20, taps: 16, n: 128, overlap: 0.5, win: 'hann', detrend: true, db: true, speed: 2,
+  };
+  const FORMAT = {
+    f1: (v) => v.toFixed(1) + ' Hz', f2: (v) => v.toFixed(1) + ' Hz', a2: (v) => v.toFixed(2),
+    noise: (v) => v.toFixed(2), fc: (v) => v + ' Hz', taps: (v) => String(v), speed: (v) => v + '×',
+  };
+
+  // ---------- Nguồn tín hiệu ----------
+  // Là hàm thuần của chỉ số mẫu n (nhiễu cũng vậy), nên đổi tham số thì cả lịch sử đổi theo nhất quán.
+  function hash(n) {
+    n = Math.imul((n | 0) ^ ((n | 0) >>> 16), 0x45d9f3b);
+    n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+  function gauss(n) {                              // Box-Muller
+    return Math.sqrt(-2 * Math.log(hash(2 * n + 1) || 1e-9)) * Math.cos(TAU * hash(2 * n + 2));
+  }
+  const HIT_PERIOD = 113;                          // mẫu giữa hai cú va đập (số nguyên tố, không trùng nhịp cửa sổ)
+  function burst(n) {                              // dao động 12 Hz tắt dần, bắt đầu ở vị trí giả ngẫu nhiên trong mỗi chu kỳ
+    const e = Math.floor(n / HIT_PERIOD);
+    const t = (n - (e * HIT_PERIOD + Math.floor(hash(e + 9001) * HIT_PERIOD * 0.5))) / FS;
+    return t >= 0 && t < 0.4 ? Math.exp(-t / 0.04) * Math.sin(TAU * 12 * t) : 0;
+  }
+  function sample(n) {
+    let x = Math.sin((TAU * p.f1 * n) / FS) + p.a2 * Math.sin((TAU * p.f2 * n) / FS + 1.3);
+    if (p.dc) x += 3;                              // thành phần DC, như trọng lực trên gia tốc kế
+    x += p.noise * gauss(n);
+    if (p.hit) x += HIT * burst(n);
+    return x;
+  }
+
+  // ---------- Trạng thái ----------
+  const value = (el) => (el.type === 'checkbox' ? el.checked : el.value !== '' && !isNaN(el.value) ? +el.value : el.value);
+  const read = () => Object.fromEntries(Object.keys(DEFAULTS).map((id) => [id, value($(id))]));
+  const hopOf = () => Math.max(1, Math.round(p.n * (1 - p.overlap)));
+  const alias = (f) => Math.abs(f - FS * Math.round(f / FS));
+
+  let p = read();                                  // tham số hiện tại
+  let s = 3 * p.n;                                 // số mẫu đã phát (mẫu mới nhất có chỉ số s-1)
+  let acc = 0, running = false, raf = 0, last = 0;
+  let version = 0, key = '', ana = null;           // kết quả phân tích khung gần nhất
+  let repaint = true;                              // cần vẽ lại hai khung tĩnh (đầu vào FFT, phổ)
+
+  // ---------- Chuỗi mẫu và phân tích ----------
+  function series() {
+    const H = 3 * p.n;                             // vẽ 3 cửa sổ lịch sử
+    const h = p.fir ? DSP.designLowpass(p.taps, p.fc, FS) : Float64Array.of(1);
+    const first = s - H;
+    const raw = new Float64Array(H + h.length - 1);
+    for (let i = 0; i < raw.length; i++) raw[i] = sample(first - (h.length - 1) + i);
+    return { H, h, first, raw: raw.subarray(h.length - 1), out: DSP.firValid(h, raw) };
+  }
+
+  function analyse(ser) {
+    const N = p.n, hop = hopOf();
+    const end = Math.floor(s / hop) * hop - 1;     // mẫu cuối của khung hoàn tất gần nhất
+    const e = end - ser.first;
+    const filtered = ser.out.subarray(e - N + 1, e + 1);
+    const prep = (x) => (p.detrend ? DSP.detrend(x) : Float64Array.from(x));
+    const x = prep(filtered);
+    const win = DSP.makeWindow(p.win, N);
+    const power = DSP.powerSpectrum(x, win);
+    const bands = DSP.bandEnergy(power, EDGES, FS);
+    const total = bands.reduce((a, v) => a + v, 0) || 1;
+    return {
+      end, N, hop, x, win, power, h: ser.h,
+      rawPower: p.fir ? DSP.powerSpectrum(prep(ser.raw.subarray(e - N + 1, e + 1)), win) : null,
+      mean: DSP.mean(filtered),
+      t: DSP.timeFeatures(x),
+      dom: DSP.dominantFrequency(power, FS),
+      share: Array.from(bands, (v) => (100 * v) / total),
+    };
+  }
+
+  function show(a) {
+    $('s-rms').textContent = a.t.rms.toFixed(3);
+    $('s-peak').textContent = a.t.peak.toFixed(2);
+    $('s-crest').textContent = a.t.crest.toFixed(2);
+    $('s-kurt').textContent = a.t.kurtosis.toFixed(2);
+    $('s-mean').textContent = a.mean.toFixed(2);
+    $('s-freq').textContent = `${a.dom.freq.toFixed(2)} Hz (bin ${a.dom.bin})`;
+    $('s-bands').textContent = a.share.map((v) => v.toFixed(0) + '%').join(' · ');
+    const D = p.fir ? (p.taps - 1) / 2 : 0;
+    $('s-delay').textContent = `${D} mẫu = ${((D / FS) * 1000).toFixed(0)} ms`;
+
+    const msg = [`Khung kết thúc ở t = ${((a.end + 1) / FS).toFixed(2)} s. Δf = Fs/N = ${(FS / a.N).toFixed(3)} Hz mỗi bin, quan sát ${(a.N / FS).toFixed(2)} s, có kết quả mới mỗi ${(a.hop / FS).toFixed(2)} s.`];
+    if (p.f1 > FS / 2) msg.push(`Tone 1 (${p.f1.toFixed(1)} Hz) vượt Nyquist ${FS / 2} Hz nên sau khi lấy mẫu nó hiện ở ${alias(p.f1).toFixed(1)} Hz.`);
+    if (p.a2 > 0 && p.f2 > FS / 2) msg.push(`Tone 2 (${p.f2.toFixed(1)} Hz) vượt Nyquist ${FS / 2} Hz nên sau khi lấy mẫu nó hiện ở ${alias(p.f2).toFixed(1)} Hz.`);
+    if (!p.detrend && p.dc) msg.push('Chưa detrend: RMS, kurtosis và phổ đều chứa thành phần DC.');
+    $('status').textContent = msg.join(' ');
+  }
+
+  // ---------- Vẽ ----------
+  const views = ['time', 'frame', 'spec'].map((name) => {
+    const canvas = $('cv-' + name);
+    return { canvas, ctx: canvas.getContext('2d'), w: 0, h: 0 };
+  });
+
+  function palette() {
+    const cs = getComputedStyle(document.documentElement);
+    const get = (name) => cs.getPropertyValue(name).trim();
+    return {
+      text: get('--text'), muted: get('--muted'), faint: get('--faint'), border: get('--border'),
+      accent: get('--accent'), indigo: get('--indigo'), mono: get('--mono'),
+    };
+  }
+
+  function fit(v) {                                // canvas sắc nét: kích thước thật = kích thước CSS × devicePixelRatio
+    const dpr = window.devicePixelRatio || 1;
+    const r = v.canvas.getBoundingClientRect();
+    v.w = r.width; v.h = r.height;
+    v.canvas.width = Math.round(r.width * dpr);
+    v.canvas.height = Math.round(r.height * dpr);
+    v.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function begin(v, c, title, right) {
+    const { ctx, w, h } = v;
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '11px ' + c.mono;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = c.text;
+    ctx.textAlign = 'left';
+    ctx.fillText(title, 8, 13);
+    const room = w - 16 - ctx.measureText(title).width;
+    if (right && ctx.measureText(right).width + 16 < room) {
+      ctx.fillStyle = c.muted;
+      ctx.textAlign = 'right';
+      ctx.fillText(right, w - 8, 13);
+    }
+  }
+
+  function polyline(ctx, n, xOf, yOf, color, width, dash) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) (i ? ctx.lineTo : ctx.moveTo).call(ctx, xOf(i), yOf(i));
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round';
+    ctx.setLineDash(dash || []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawTime(v, c, ser) {
+    const { ctx, w, h } = v;
+    const { H } = ser, N = p.n, hop = ana.hop;
+    begin(v, c, 'Theo thời gian', `N = ${N} · hop = ${hop}`);
+    const left = 8, top = 40, bottom = h - 18;
+    const xOf = (i) => left + (i / H) * (w - 2 * left);
+    const half = 1 + p.a2 + 3 * p.noise + (p.hit ? HIT * 0.6 : 0);   // thang dọc cố định theo tham số, tránh nhấp nháy
+    const mid = p.dc ? 3 : 0;
+    const yOf = (val) => bottom - ((val - (mid - half)) / (2 * half)) * (bottom - top);
+
+    ctx.textAlign = 'center';
+    for (let n = Math.ceil(ser.first / FS) * FS; n < s; n += FS) {   // vạch mỗi giây, trôi sang trái cùng tín hiệu
+      const x = xOf(n - ser.first);
+      ctx.strokeStyle = c.border; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      ctx.fillStyle = c.muted; ctx.fillText(n / FS + ' s', Math.max(x, 14), h - 5);
+    }
+
+    const e = ana.end - ser.first;                 // mẫu cuối của khung đang phân tích
+    const x0 = xOf(e - N + 1), x1 = xOf(e + 1);
+    ctx.fillStyle = c.indigo;
+    ctx.globalAlpha = 0.12; ctx.fillRect(x0, top, x1 - x0, bottom - top);
+    ctx.globalAlpha = 1;   ctx.fillRect(x0, 20, x1 - x0, 5);
+    ctx.strokeStyle = c.indigo; ctx.lineWidth = 1; ctx.setLineDash([3, 2]);          // khung trước đó
+    ctx.strokeRect(xOf(e - hop - N + 1) + 0.5, 28.5, xOf(e - hop + 1) - xOf(e - hop - N + 1), 4);
+    ctx.setLineDash([]);
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, top, w, bottom - top); ctx.clip();
+    polyline(ctx, H, (i) => xOf(i + 0.5), (i) => yOf(ser.raw[i]), c.faint, 1);
+    polyline(ctx, H, (i) => xOf(i + 0.5), (i) => yOf(ser.out[i]), c.indigo, 1.75);
+    ctx.restore();
+  }
+
+  function drawFrame(v, c) {
+    const { ctx, w, h } = v;
+    const { x, win, N } = ana;
+    begin(v, c, 'Đầu vào FFT = (khung − trung bình) × cửa sổ', `cửa sổ ${WIN_NAMES[p.win]}`);
+    const z = x.map((val, i) => val * win[i]);
+    const M = Math.max(...x.map(Math.abs)) || 1;
+    const lo = Math.min(-M, ...x), hi = Math.max(M, ...x);
+    const left = 8, top = 24, bottom = h - 8;
+    const xOf = (i) => left + (i / (N - 1)) * (w - 2 * left);
+    const yOf = (val) => bottom - ((val - lo) / (hi - lo)) * (bottom - top);
+
+    ctx.strokeStyle = c.border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, yOf(0)); ctx.lineTo(w - left, yOf(0)); ctx.stroke();
+    polyline(ctx, N, xOf, (i) => yOf(M * win[i]), c.muted, 1, [4, 3]);          // đường bao của cửa sổ
+    polyline(ctx, N, xOf, (i) => yOf(-M * win[i]), c.muted, 1, [4, 3]);
+    polyline(ctx, N, xOf, (i) => yOf(x[i]), c.faint, 1);
+    polyline(ctx, N, xOf, (i) => yOf(z[i]), c.indigo, 1.75);
+  }
+
+  function drawSpec(v, c) {
+    const { ctx, w, h } = v;
+    const { power, rawPower, N, dom, share } = ana;
+    begin(v, c, 'Phổ công suất', `${p.db ? 'dB so với đỉnh' : 'tuyến tính'} · Δf = ${(FS / N).toFixed(3)} Hz`);
+    const left = 40, right = 8, top = 50, bottom = h - 20;
+    const half = N / 2, W = w - left - right, H = bottom - top;
+    const xOfBin = (k) => left + (k / half) * W;
+    const xOfHz = (f) => left + (f / (FS / 2)) * W;
+    const peak = Math.max(...power) || 1;
+    const level = (P) => Math.max(0, Math.min(1, p.db ? (80 + 10 * Math.log10(P / peak + 1e-12)) / 80 : P / peak));
+    const yOfLevel = (l) => bottom - l * H;
+
+    ctx.textAlign = 'right'; ctx.fillStyle = c.muted; ctx.strokeStyle = c.border; ctx.lineWidth = 1;
+    for (const [l, label] of p.db ? [[1, '0'], [0.75, '-20'], [0.5, '-40'], [0.25, '-60'], [0, '-80']] : [[1, '1'], [0.5, '0.5'], [0, '0']]) {
+      const y = yOfLevel(l);
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(w - right, y); ctx.stroke();
+      ctx.fillText(label, left - 6, y + 4);
+    }
+    ctx.textAlign = 'center';
+    for (let f = 0; f <= FS / 2; f += 10) {
+      ctx.textAlign = f === FS / 2 ? 'right' : 'center';
+      ctx.fillText(f + (f === FS / 2 ? ' Hz' : ''), f === FS / 2 ? w - right : xOfHz(f), h - 5);
+    }
+    ctx.textAlign = 'center';
+
+    ctx.setLineDash([2, 3]);                       // mép các dải năng lượng
+    for (let b = 0; b < 4; b++) {
+      if (b) { ctx.beginPath(); ctx.moveTo(xOfHz(EDGES[b]), top - 12); ctx.lineTo(xOfHz(EDGES[b]), bottom); ctx.stroke(); }
+    }
+    ctx.setLineDash([]);
+    for (let b = 0; b < 4; b++) {
+      ctx.fillStyle = c.muted;
+      ctx.fillText(`B${b + 1} ${share[b].toFixed(0)}%`, xOfHz((EDGES[b] + EDGES[b + 1]) / 2), 28);
+    }
+
+    const bw = Math.max(1, (W / half) * 0.8);
+    for (let k = 0; k <= half; k++) {
+      ctx.fillStyle = k === dom.bin ? c.accent : c.indigo;
+      const l = level(power[k]);
+      ctx.fillRect(xOfBin(k) - bw / 2, yOfLevel(l), bw, l * H);
+    }
+    if (rawPower) polyline(ctx, half + 1, xOfBin, (k) => yOfLevel(level(rawPower[k])), c.faint, 1.25);
+
+    if (p.fir) {                                   // đáp ứng của FIR trên cùng trục
+      const pts = 160;
+      polyline(ctx, pts + 1, (i) => xOfHz((i / pts) * (FS / 2)),
+        (i) => yOfLevel(level(DSP.gainSq(ana.h, (i / pts) * (FS / 2), FS) * peak)), c.muted, 1.25, [5, 4]);
+    }
+
+    const px = xOfHz(dom.freq);
+    ctx.fillStyle = c.accent;
+    ctx.textAlign = px > w - 70 ? 'right' : 'left';
+    ctx.fillText(dom.freq.toFixed(2) + ' Hz', px > w - 70 ? px + 4 : px - 4, 44);
+  }
+
+  // ---------- Vòng lặp ----------
+  function render() {
+    const ser = series();
+    const k = Math.floor(s / hopOf()) + '|' + version;
+    if (k !== key) { key = k; ana = analyse(ser); show(ana); repaint = true; }
+    const c = palette();
+    drawTime(views[0], c, ser);
+    if (repaint) { drawFrame(views[1], c); drawSpec(views[2], c); repaint = false; }
+  }
+
+  function tick(now) {
+    if (!running) return;
+    acc += Math.min((now - last) / 1000, 0.1) * FS * p.speed;
+    last = now;
+    const whole = Math.floor(acc);
+    acc -= whole; s += whole;
+    render();
+    raf = requestAnimationFrame(tick);
+  }
+
+  function setRunning(on) {
+    running = on;
+    cancelAnimationFrame(raf);
+    $('run').textContent = on ? 'Tạm dừng' : 'Chạy';
+    $('readout').setAttribute('aria-live', on ? 'off' : 'polite');   // đang chạy thì đừng bắt trình đọc màn hình đọc liên tục
+    if (on) { last = performance.now(); raf = requestAnimationFrame(tick); }
+  }
+
+  function changed() {
+    const prev = p;
+    p = read();
+    for (const id in FORMAT) $(id + 'o').value = FORMAT[id](p[id]);
+    version++;
+    if (p.n !== prev.n) s = 3 * p.n;
+    s = Math.ceil(s / hopOf()) * hopOf();          // luôn đứng đúng ranh giới một khung
+    if (!running) render();
+  }
+
+  function reset() {
+    for (const [id, val] of Object.entries(DEFAULTS)) {
+      const el = $(id);
+      if (el.type === 'checkbox') el.checked = val; else el.value = val;
+    }
+    setRunning(false);
+    s = 3 * DEFAULTS.n; acc = 0;
+    changed();
+  }
+
+  Object.keys(DEFAULTS).forEach((id) => $(id).addEventListener('input', changed));
+  $('run').addEventListener('click', () => setRunning(!running));
+  $('step').addEventListener('click', () => {
+    setRunning(false);
+    s = (Math.floor(s / hopOf()) + 1) * hopOf();   // sang ranh giới khung kế tiếp
+    render();
+  });
+  $('reset').addEventListener('click', reset);
+
+  const redraw = () => { views.forEach(fit); repaint = true; render(); };
+  new ResizeObserver(redraw).observe(document.querySelector('.sim'));
+  new MutationObserver(() => { repaint = true; render(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { repaint = true; render(); });
+  if (document.fonts) document.fonts.ready.then(() => { repaint = true; render(); });
+
+  for (const id in FORMAT) $(id + 'o').value = FORMAT[id](p[id]);
+  redraw();
+})();
+  </script>
+</body>
+</html>
