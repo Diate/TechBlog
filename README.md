@@ -85,7 +85,7 @@ Trang chủ hiện một ảnh bìa cho mỗi bài, `assets/js/covers.js` tự s
 Ảnh luôn giống nhau cho cùng một `slug`, màu lấy từ biến CSS của theme.
 
 ### Sơ đồ
-Sơ đồ khối, sơ đồ tuần tự... viết tay bằng SVG trong `<figure class="diagram">`, xem mẫu trong `posts/sorting-visualizer.html`:
+Sơ đồ khối, sơ đồ tuần tự... viết tay bằng SVG trong `<figure class="diagram">`, xem mẫu chạy thật kèm HTML để chép trong `templates/components/` (hoặc khối sơ đồ trong `posts/dsp-sensor-pipeline.html`):
 - `<figcaption>` đặt đầu `figure` làm tiêu đề; `<svg>` có `viewBox` rộng khoảng 680, `role="img"` kèm `<title>` và `<desc>` (đây là nội dung, không phải trang trí).
 - Lớp dùng trong SVG: `.box` (khung), `.box.solid` (khung đặc, chữ `.inv`), `.box.key` (nhấn), `.line` (nét, thêm `.dash` hoặc `.key`), `.life` (đường sống), `.muted`, `.sm`, `.tag`; mũi tên là `<marker class="head">` (`id` phải khác nhau giữa các sơ đồ).
 - Màn hình hẹp thì sơ đồ cuộn ngang, `main.js` tự cho nó focus bằng bàn phím khi đó.
