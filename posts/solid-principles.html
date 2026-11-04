@@ -1,0 +1,2733 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SOLID: năm nguyên tắc thiết kế, từ ví dụ nhỏ đến module firmware · Tech Blog</title>
+  <meta name="description" content="Năm nguyên tắc SOLID giải thích bằng ví dụ C nhỏ, mỗi nguyên tắc có mô phỏng riêng và một ví dụ tính tay để kiểm lại. Sau đó ráp thành một module điều khiển quạt chạy thật và áp dụng vào embedded, firmware, automotive.">
+  <meta name="cover" content="blocks">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script src="../assets/js/main.js"></script>
+  <style>
+    /* CSS riêng của bài này */
+    .post .eq { margin: 0 0 1.4em; padding: .55rem 0 .55rem 1rem; border-left: 2px solid var(--accent); font: .9375rem/1.7 var(--mono); overflow-x: auto; }
+
+    /* Ví dụ tính tay: cùng vạch đỏ bên trái với .eq, để phân biệt với phần giải thích */
+    .post .calc { margin: 1.75em 0; padding: .1rem 0 .1rem 1rem; border-left: 2px solid var(--accent); }
+    .post .calc > :last-child { margin-bottom: 0; }
+    .post .calc .calc-title { margin: 0 0 .75rem; font: .75rem/1.5 var(--mono); color: var(--muted); }
+    .post .calc table { margin: .9em 0; }
+    .post .calc table.dense th, .post .calc table.dense td { padding: .45rem .5rem .45rem 0; }
+    .post .try { font-size: .9375em; color: var(--muted); }
+    .post .try b { color: var(--text); font-weight: 600; }
+
+    /* Khung mô phỏng */
+    .sim .h-sm { height: 7rem; }
+    .sim .h-md { height: 11rem; }
+    .sim table { margin: 0 0 1rem; }
+    .sim .sim-actions { margin-top: .75rem; }
+    .sim-controls { flex-direction: column; align-items: stretch; gap: 0; }
+    .ctl-group { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 0; border-top: 1px solid var(--border); }
+    .ctl-group:first-child { padding-top: 0; border-top: 0; }
+    .ctl-title { flex: 1 0 100%; font: .75rem/1.4 var(--mono); color: var(--text); }
+    @media (min-width: 40.01rem) { .sim-controls input[type="range"] { width: 8rem; } }
+    .sim-controls output { min-width: 4.25rem; color: var(--text); font-variant-numeric: tabular-nums; }
+    .sim-controls .check { cursor: pointer; }
+    .sim-controls .check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent); }
+    .sim canvas + canvas { margin-top: .75rem; border-top: 1px solid var(--border); padding-top: .75rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 20px; font: .75rem/1.4 var(--mono); color: var(--muted); margin: 12px 0 1rem; }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c); }
+    .sim .dsp-status { margin: .75rem 0 0; font: .8125rem/1.55 var(--mono); color: var(--muted); }
+    .sim .dsp-status:empty { display: none; }
+    .sim .pane { margin: 0 0 1.25rem; }
+    .sim .pane-title { margin: 0 0 .5rem; font: .75rem/1.4 var(--mono); color: var(--text); }
+    .sim .pane-sub { margin: 0 0 .4rem; font: .6875rem/1.4 var(--mono); color: var(--muted); }
+    .sim .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.25rem; }
+    .sim td, .sim th { font-size: .875rem; }
+    .sim tbody th { font: 500 .8125rem/1.4 var(--mono); }
+    .sim tr.sel td, .sim tr.sel th { background: color-mix(in srgb, var(--indigo) 14%, transparent); }
+    .sim td.pass { color: var(--green); }
+    .sim td.fail { color: var(--accent); font-weight: 600; }
+    .sim td.st-edit { color: var(--accent); font-weight: 600; }
+    .sim td.st-rebuild { color: var(--indigo); }
+    .sim td.st-none { color: var(--muted); }
+    .sim .col-hit { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .sim table.isp td, .sim table.isp th { padding-right: .6rem; white-space: nowrap; }
+    .sim table.dense th, .sim table.dense td { padding: .3rem .75rem .3rem 0; }
+
+    /* Đồ thị phụ thuộc (SVG vẽ bằng S.graph) */
+    .graph-wrap { overflow-x: auto; }
+    .sim svg.graph { display: block; width: 100%; height: auto; max-width: 44rem; min-width: 34rem; }
+    .g-edge { stroke: var(--muted); stroke-width: 1.25; fill: none; }
+    .g-edge.bad { stroke: var(--accent); stroke-width: 2; }
+    .g-head path { fill: var(--muted); }
+    .g-head.bad path { fill: var(--accent); }
+    .g-node rect { fill: var(--bg); stroke: var(--rule); stroke-width: 1.25; }
+    .g-node text { font: 11px var(--mono); fill: var(--text); }
+    .g-node .g-sub { font-size: 9.5px; fill: var(--muted); }
+    .g-node.iface rect { stroke-dasharray: 5 3; }
+    .g-node.iface text { font-style: italic; }
+    .g-node.hw rect { stroke: var(--ochre); stroke-width: 2; }
+    .g-node.n-edit rect { fill: color-mix(in srgb, var(--accent) 20%, var(--bg)); stroke: var(--accent); stroke-width: 2; }
+    .g-node.n-new rect { fill: color-mix(in srgb, var(--green) 20%, var(--bg)); stroke: var(--green); stroke-width: 2; }
+    .g-node.n-test rect { fill: color-mix(in srgb, var(--indigo) 20%, var(--bg)); stroke: var(--indigo); stroke-width: 2; }
+    .g-label { font: 10px var(--mono); fill: var(--muted); }
+    .diagram .box.dash { stroke-dasharray: 5 3; }
+
+    /* Khung code nhỏ trong mô phỏng */
+    .listing { margin: 0 0 1rem; border: 1px solid var(--border); background: var(--bg); overflow-x: auto; }
+    .listing .fn + .fn { border-top: 1px solid var(--border); }
+    .listing .fn-head { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem .7rem; border-bottom: 1px solid var(--border); font: .6875rem/1.4 var(--mono); color: var(--muted); }
+    .listing .badge.hw { color: var(--ochre); }
+    .listing .badge.pure { color: var(--green); }
+    .ln { display: grid; grid-template-columns: 2rem max-content; font: .75rem/1.65 var(--mono); min-width: 100%; }
+    .ln i { font-style: normal; color: var(--muted); text-align: right; padding-right: .6rem; user-select: none; }
+    .post .ln code { white-space: pre; padding: 0 .75rem 0 0; background: none; font: inherit; }
+    .ln.a-hw { box-shadow: inset 3px 0 0 var(--indigo); }
+    .ln.a-prod { box-shadow: inset 3px 0 0 var(--ochre); }
+    .ln.a-log { box-shadow: inset 3px 0 0 var(--green); }
+    .ln.hit { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+    .ln.new { background: color-mix(in srgb, var(--green) 16%, transparent); }
+    .sim ul.emit { margin: 0 0 1rem; padding: 0; list-style: none; font: .75rem/1.7 var(--mono); }
+    .sim ul.emit li { padding-left: .75rem; border-left: 2px solid var(--border); }
+    .sim ul.emit li.dup { border-left-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .sim ul.files { margin: 0 0 1rem; padding: 0; list-style: none; font: .75rem/1.7 var(--mono); }
+    .sim ul.files li { padding-left: .75rem; border-left: 2px solid var(--border); margin: 0; }
+    .sim ul.files li.vendor { font-style: italic; color: var(--muted); }
+    .sim pre.report { margin: 1rem 0 0; padding: .75rem 1rem; background: var(--bg); border: 1px solid var(--border); font: .75rem/1.65 var(--mono); white-space: pre-wrap; overflow-x: auto; }
+    .sim .log { margin-top: 1rem; }
+
+    @media (max-width: 40rem) {
+      .sim .two { grid-template-columns: minmax(0, 1fr); }
+      .sim-controls label.check { flex: 1 1 calc(50% - .75rem); justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="container post">
+      <h1>SOLID: năm nguyên tắc thiết kế, từ ví dụ nhỏ đến module firmware</h1>
+      <p class="post-meta">
+        <time datetime="2026-11-03">2026-11-03</time>
+        <span>#solid</span>
+        <span>#kiến trúc phần mềm</span>
+        <span>#embedded</span>
+        <span>#firmware</span>
+        <span>#automotive</span>
+      </p>
+
+      <p>SOLID là năm nguyên tắc để viết code sao cho một yêu cầu mới chỉ chạm vào vài chỗ nhỏ và dự đoán được. Bài này đi qua từng chữ cái bằng C với một module điều khiển quạt tản nhiệt, rồi áp dụng vào embedded, firmware và automotive.</p>
+
+      <section class="sim" id="sim-ripple" aria-label="Mô phỏng: một yêu cầu thay đổi lan ra bao nhiêu module">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Yêu cầu thay đổi">
+            <label>Yêu cầu
+              <select name="req">
+                <option value="i2c" selected>Đổi cảm biến từ ADC sang I²C</option>
+                <option value="flash">Thêm đích log ra flash</option>
+                <option value="policy">Đổi chính sách quạt sang dải tuyến tính</option>
+                <option value="pc">Chạy bộ điều khiển trên PC để test tự động</option>
+                <option value="port">Thêm trường “chất lượng đo” vào phép đo</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="pane">
+          <p class="pane-title">A · controller tự làm hết và gọi thẳng driver</p>
+          <div class="graph-wrap"><svg class="graph" data-g="A" role="img" aria-label="Đồ thị phụ thuộc của thiết kế A"></svg></div>
+          <p class="dsp-status" data-out="sayA"></p>
+        </div>
+        <div class="pane">
+          <p class="pane-title">B · controller chỉ biết bốn cổng, main lắp ráp</p>
+          <div class="graph-wrap"><svg class="graph" data-g="B" role="img" aria-label="Đồ thị phụ thuộc của thiết kế B"></svg></div>
+          <p class="dsp-status" data-out="sayB"></p>
+        </div>
+        <div class="legend">
+          <span style="--c: var(--accent)">sửa file có sẵn</span>
+          <span style="--c: var(--green)">thêm file mới</span>
+          <span style="--c: var(--indigo)">phải kiểm lại</span>
+          <span style="--c: var(--faint)">không bị ảnh hưởng</span>
+        </div>
+        <table>
+          <thead><tr><th></th><th>Sửa file có sẵn</th><th>Thêm file mới</th><th>Phải kiểm lại</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">A · yêu cầu này</th><td data-out="aE"></td><td data-out="aN"></td><td data-out="aT"></td></tr>
+            <tr><th scope="row">B · yêu cầu này</th><td data-out="bE"></td><td data-out="bN"></td><td data-out="bT"></td></tr>
+            <tr><th scope="row">A · cả 5 yêu cầu</th><td data-out="aE5"></td><td data-out="aN5"></td><td data-out="aT5"></td></tr>
+            <tr><th scope="row">B · cả 5 yêu cầu</th><td data-out="bE5"></td><td data-out="bN5"></td><td data-out="bT5"></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <p>Hai thiết kế trên làm cùng một việc: đọc nhiệt độ, quyết định tốc độ quạt, ghi log. Ở A, <code>controller</code> gọi thẳng driver ADC, UART, PWM, còn ba module <code>diag</code>, <code>can_tx</code>, <code>lcd</code> đọc biến toàn cục của nó. Ở B, <code>controller</code> chỉ biết bốn cổng (<code>temp_port</code>, <code>policy_port</code>, <code>fan_port</code>, <code>log_port</code>); các bản cài đặt cắm vào cổng, và <code>main</code> là nơi duy nhất nối dây. Mũi tên chỉ từ module phụ thuộc sang module được phụ thuộc; nét đứt là cổng, tức một lời hứa chứ không phải code chạy.</p>
+      <p class="try"><b>Thử:</b> chọn lần lượt từng yêu cầu. Bốn yêu cầu đầu, A luôn sửa <code>controller</code> rồi kéo cả bốn module phụ thuộc vào nó đi kiểm lại, còn B chỉ thêm module mới và đổi một dòng nối dây trong <code>main</code> (riêng bài test trên PC không sửa file nào). Yêu cầu cuối là ngoại lệ đáng nhớ: khi chính cổng đổi, B phải sửa nhiều module hơn A.</p>
+
+      <h2 id="muc-tieu">SOLID giải quyết vấn đề gì</h2>
+      <p>Phần mềm sống lâu thì yêu cầu đổi liên tục: board mới, cảm biến mới, chính sách mới, khách hàng mới. Chi phí của một thay đổi không nằm ở số dòng phải viết, mà ở hai thứ: bao nhiêu chỗ phải sửa theo, và bao nhiêu thứ phải kiểm lại sau đó. Mô phỏng đầu bài đo đúng hai thứ này trên hai thiết kế của cùng một module.</p>
+      <p>Hai khái niệm quyết định chúng. <b>Cohesion</b> (độ gắn kết) là mức những thứ đổi vì cùng một lý do được để chung chỗ. <b>Coupling</b> (độ ghép nối) là mức một module phải biết về module khác. Thiết kế tốt có cohesion cao, coupling thấp, và chỉ ghép nối vào những thứ ít đổi. SOLID là năm cách cụ thể để đạt điều đó: Robert C. Martin đưa ra các nguyên tắc, Michael Feathers đặt chữ viết tắt.</p>
+      <table>
+        <thead><tr><th>Chữ</th><th>Nguyên tắc</th><th>Câu hỏi tự kiểm</th><th>Dấu hiệu vi phạm</th></tr></thead>
+        <tbody>
+          <tr><td><b>S</b></td><td>Single Responsibility</td><td>Module này có mấy lý do để bị sửa?</td><td>một file đổi vì ba nhóm yêu cầu khác nhau</td></tr>
+          <tr><td><b>O</b></td><td>Open/Closed</td><td>Thêm một trường hợp mới có phải sửa code cũ không?</td><td><code>switch</code> theo loại nằm rải rác</td></tr>
+          <tr><td><b>L</b></td><td>Liskov Substitution</td><td>Thay bản cài đặt này bằng bản khác, bên dùng có hỏng không?</td><td>bên dùng phải kiểm tra loại cụ thể; bản cài đặt trả giá trị “đặc biệt”</td></tr>
+          <tr><td><b>I</b></td><td>Interface Segregation</td><td>Bên dùng có bị buộc phụ thuộc vào hàm nó không gọi không?</td><td>bản giả để test phải viết nhiều hàm rỗng</td></tr>
+          <tr><td><b>D</b></td><td>Dependency Inversion</td><td>Logic chính có <code>#include</code> thẳng driver không?</td><td>không chạy được test trên PC</td></tr>
+        </tbody>
+      </table>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · tìm tập module phải kiểm lại trên đồ thị đầu bài</p>
+        <p>Yêu cầu “đổi cảm biến từ ADC sang I²C”. Cách tính chỉ có ba bước: gom module có code đổi, thêm mọi module phụ thuộc vào chúng (mũi tên trỏ vào), lặp lại cho đến khi không thêm được nữa.</p>
+        <ol>
+          <li><b>Thiết kế A.</b> Code đổi: <code>controller</code> (sửa) và <code>i2c</code> (mới). Mũi tên trỏ vào <code>controller</code> đến từ <code>main</code>, <code>diag</code>, <code>can_tx</code>, <code>lcd</code>; mũi tên trỏ vào <code>i2c</code> đến từ <code>controller</code>, đã nằm trong tập. Vậy 1 sửa, 1 thêm, <b>4 kiểm lại</b>: <code>diag</code>, <code>can_tx</code>, <code>lcd</code> đọc trạng thái của <code>controller</code>, nên hành vi của chúng có thể đổi theo mà không ai sửa dòng nào.</li>
+          <li><b>Thiết kế B.</b> Code đổi: <code>i2c_src</code> (mới) và một dòng trong <code>main</code> (sửa). Không mũi tên nào trỏ vào hai module này, vì <code>controller</code> chỉ phụ thuộc cổng <code>temp_port</code> và cổng không đổi. Vậy 1 sửa, 1 thêm, <b>0 kiểm lại</b>.</li>
+          <li><b>Cộng cả năm yêu cầu</b> (chạy đúng thuật toán trên, số liệu hiện ở bảng cuối mô phỏng): A sửa 9, thêm 2, kiểm lại 20; B sửa 6, thêm 7, kiểm lại 1.</li>
+        </ol>
+        <p>Đọc kết quả cho trung thực: A có 11 lần sửa hoặc thêm, B có 13, nên B viết nhiều hơn một chút. Cái khác nằm ở chỗ nào: A sửa vào logic chính và mỗi lần kéo bốn module đi kiểm lại (20 lần trong năm yêu cầu), B chủ yếu thêm file mới và đổi dòng nối dây (1 lần kiểm lại). SOLID không làm bạn viết ít code hơn. Nó làm thay đổi ít lan hơn, với điều kiện các cổng ít đổi.</p>
+      </div>
+
+      <h2 id="srp">S · Single Responsibility: một lý do để thay đổi</h2>
+      <p>Nguyên tắc: một module chỉ nên có một lý do để thay đổi. “Lý do” ở đây là một nhóm người hoặc một loại yêu cầu (Martin gọi là <i>actor</i>), không phải số việc hàm làm. Hàm dưới đây chỉ “điều khiển quạt”, nhưng ba nhóm cùng có quyền đòi sửa nó: đội phần cứng khi đổi board, nhóm sản phẩm khi đổi ngưỡng, đội công cụ khi đổi định dạng log. Thanh màu bên trái mỗi dòng cho biết dòng đó thuộc nhóm nào.</p>
+
+      <section class="sim" id="sim-srp" aria-label="Mô phỏng Single Responsibility: yêu cầu của từng nhóm chạm vào những dòng nào">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Ai đòi sửa">
+            <span class="ctl-title">Ai đòi sửa (chọn một hoặc nhiều)</span>
+            <label class="check"><input name="hw" type="checkbox" checked> Đội phần cứng</label>
+            <label class="check"><input name="prod" type="checkbox"> Nhóm sản phẩm</label>
+            <label class="check"><input name="log" type="checkbox"> Đội công cụ log</label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Thiết kế">
+            <label>Thiết kế
+              <select name="design">
+                <option value="mono" selected>Một hàm thermal_task</option>
+                <option value="split">Tách theo lý do thay đổi</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="listing" data-out="code"></div>
+        <div class="legend">
+          <span style="--c: var(--indigo)">phần cứng</span>
+          <span style="--c: var(--ochre)">sản phẩm</span>
+          <span style="--c: var(--green)">log</span>
+          <span style="--c: var(--accent)">dòng bị sửa</span>
+        </div>
+        <div class="sim-stats">
+          <span>Dòng bị sửa: <b data-out="edited">–</b></span>
+          <span>Hàm bị chạm: <b data-out="touched">–</b></span>
+          <span>Dòng phải kiểm lại: <b data-out="retest">–</b></span>
+          <span>Test được trên PC: <b data-out="pc">–</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> ở thiết kế gộp, chọn “Nhóm sản phẩm”: chỉ 3 dòng bị sửa nhưng cả 12 dòng phải kiểm lại, và hàm chạm <code>ADC1-&gt;DR</code> nên không chạy được trên PC. Chuyển sang tách: vẫn 3 dòng, nhưng chỉ <code>fan_percent</code> (6 dòng) phải kiểm lại, và nó là hàm thuần số nên test được trên PC. Chọn thêm “Đội phần cứng”: bản gộp có hai nhóm cùng sửa một hàm (nguy cơ xung đột khi gộp nhánh), bản tách thì họ sửa các hàm khác nhau.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · đếm dòng của <code>thermal_task</code> trước và sau khi tách</p>
+        <ol>
+          <li>Hàm gộp có 12 dòng, kể cả dòng khai báo và hai dấu ngoặc nhọn. Dòng 3, 4, 8 là phần cứng (đọc ADC, quy đổi, đặt PWM); dòng 5, 6, 7 là sản phẩm; dòng 9, 10, 11 là log. Mỗi nhóm có 3 dòng.</li>
+          <li>Bất kỳ nhóm nào đòi sửa, phải kiểm lại cả hàm: <code>12 dòng</code>, và vì hàm chứa <code>ADC1-&gt;DR</code>, <code>TIM3-&gt;CCR1</code>, <code>uart_write</code> nên phải có phần cứng mới chạy được.</li>
+          <li>Sau khi tách thành 5 hàm (5 + 6 + 4 + 6 + 7 = <code>28 dòng</code>), phần cứng chạm <code>read_temp_mc</code> và <code>set_fan</code> nên kiểm lại <code>5 + 4 = 9</code> dòng; sản phẩm chạm <code>fan_percent</code>, kiểm lại <code>6</code> dòng; log chạm <code>report</code>, kiểm lại <code>6</code> dòng.</li>
+        </ol>
+        <p>Cái giá cũng rõ ràng: 28 dòng thay cho 12, và số dòng bị sửa mỗi lần vẫn là 3. Tách không làm việc sửa nhẹ đi, nó làm phạm vi hậu quả hẹp lại và cho phép test <code>fan_percent</code> mà không cần chip.</p>
+      </div>
+      <p>Tách theo lý do thay đổi, không theo cỡ hàm. Hai trăm dòng cùng một lý do (một bảng tra, một máy trạng thái) không cần cắt, còn năm dòng gồm ba lý do thì nên cắt. Dấu hiệu nhận ra: một file hay dính xung đột khi gộp nhánh, commit message có chữ “và”, hoặc phải dựng cả phần cứng chỉ để thử một con số ngưỡng.</p>
+
+      <h2 id="ocp">O · Open/Closed: thêm bằng code mới, không sửa code cũ</h2>
+      <p>Một module nên mở cho việc mở rộng và đóng với việc sửa đổi: thêm hành vi mới bằng cách thêm code, không sửa code đang chạy tốt. Muốn vậy phải có một <b>đường nối</b> (seam): chỗ code cũ gọi qua một abstraction, để bản mới cắm vào mà không đụng tới nó. Ví dụ quen thuộc nhất là <code>switch</code> theo loại:</p>
+      <pre><code class="language-c" data-filename="log_emit.c (kiểu đóng gói sai)">typedef enum { SINK_UART, SINK_RAM, SINK_FLASH } sink_kind_t;   /* thêm đích: sửa ở đây */
+
+void log_emit(sink_kind_t kind, const log_event_t *ev)
+{
+    switch (kind) {
+    case SINK_UART:  uart_write_event(ev); break;
+    case SINK_RAM:   ram_push(ev);         break;
+    case SINK_FLASH: flash_append(ev);     break;
+    /* thêm đích: thêm một case ở đây, tức là sửa hàm đang chạy tốt */
+    }
+}</code></pre>
+      <p>Mỗi đích log mới buộc bạn sửa cả <code>enum</code> lẫn hàm này, và test lại toàn bộ các đích cũ. Bản dưới đây đảo lại: có một cổng <code>log_sink_t</code> (xem <a href="#module">phần ghép module</a>), và <code>tee_log</code> chỉ việc chuyển sự kiện cho mọi sink đã đăng ký. Thêm đích mới là viết một sink và thêm một dòng đăng ký ở nơi lắp ráp:</p>
+      <pre><code data-from="#c-tee-c" data-filename="tee_log.c"></code></pre>
+
+      <section class="sim" id="sim-ocp" aria-label="Mô phỏng Open/Closed: thêm đích log bằng switch và bằng bảng đăng ký">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Các đích log đang bật">
+            <span class="ctl-title">Các đích log đang bật (theo thứ tự được thêm vào)</span>
+            <label class="check"><input name="uart" type="checkbox" checked disabled> UART</label>
+            <label class="check"><input name="ram" type="checkbox" checked> RAM</label>
+            <label class="check"><input name="flash" type="checkbox"> Flash</label>
+            <label class="check"><input name="lcd" type="checkbox"> LCD</label>
+            <label class="check"><input name="can" type="checkbox"> CAN</label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Lỗi lập trình">
+            <label class="check"><input name="bug" type="checkbox"> Lỗi: quên <code>break</code> sau case Flash</label>
+          </div>
+        </div>
+        <div class="pane">
+          <p class="pane-title">Bản switch: mỗi đích mới là một lần sửa <code>log_emit</code></p>
+          <div class="listing" data-out="swCode"></div>
+          <ul class="emit" data-out="swOut"></ul>
+        </div>
+        <div class="pane">
+          <p class="pane-title">Bản đăng ký: <code>tee_log</code> không đổi, mỗi đích mới là một dòng ở nơi lắp ráp</p>
+          <div class="listing" data-out="regCode"></div>
+          <ul class="emit" data-out="regOut"></ul>
+        </div>
+        <table>
+          <thead><tr><th></th><th>Chỗ trong code cũ bị sửa</th><th>File mới</th><th>Dòng lắp ráp thêm</th><th>Hàm phải test lại</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">switch</th><td data-out="swEdit"></td><td data-out="swNew"></td><td>0</td><td data-out="swTest"></td></tr>
+            <tr><th scope="row">đăng ký</th><td>0</td><td data-out="regNew"></td><td data-out="regWire"></td><td>0</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <p class="try"><b>Thử:</b> bật Flash rồi tick “quên <code>break</code>”. Flash đang là đích cuối nên lỗi nằm im, không dòng nào bị lặp. Bật thêm CAN: từ giờ mỗi sự kiện gửi tới Flash còn rơi tiếp xuống CAN, nên CAN nhận hai lần. Lỗi nằm ở dòng thêm trước đó, nổ ra ở lần thêm sau. Bản đăng ký không có kiểu lỗi này vì code cũ không bị sửa.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · thêm 4 đích log vào hệ thống chỉ có UART</p>
+        <table class="dense">
+          <thead><tr><th>Đích đã thêm</th><th>switch: chỗ sửa trong code cũ</th><th>đăng ký: chỗ sửa trong code cũ</th><th>đăng ký: file mới, dòng lắp ráp</th></tr></thead>
+          <tbody>
+            <tr><td>1 (RAM)</td><td>2</td><td>0</td><td>1 file, 1 dòng</td></tr>
+            <tr><td>2 (Flash)</td><td>4</td><td>0</td><td>2 file, 2 dòng</td></tr>
+            <tr><td>3 (LCD)</td><td>6</td><td>0</td><td>3 file, 3 dòng</td></tr>
+            <tr><td>4 (CAN)</td><td>8</td><td>0</td><td>4 file, 4 dòng</td></tr>
+          </tbody>
+        </table>
+        <p>Mỗi đích thêm vào bản switch sửa 2 chỗ: một mục trong <code>enum</code> và một <code>case</code>. Sau 4 lần thêm, 8 chỗ của code cũ đã bị chạm, và mỗi lần chạm đều đòi kiểm lại các <code>case</code> khác.</p>
+      </div>
+      <p>“Đóng” chưa bao giờ tuyệt đối: <code>tee_log</code> chỉ đóng với thay đổi “thêm đích”, mà bạn đã cắt đường nối cho đúng thay đổi đó. Thêm trường vào <code>log_event_t</code> thì mọi sink vẫn phải sửa. Vì vậy đừng dựng đường nối cho mọi thứ; dựng ở chỗ đã đổi hai lần, hoặc chắc chắn sẽ đổi.</p>
+
+      <h2 id="lsp">L · Liskov Substitution: thay bản này bằng bản kia mà bên dùng không biết</h2>
+      <p>Nơi nào đang dùng một bản cài đặt thì phải thay được bằng bản cài đặt khác của cùng cổng mà bên dùng không cần biết chuyện đó. Điều kiện là bản thay thế giữ đúng <b>hợp đồng</b> của cổng. Hợp đồng gồm kiểu hàm và cả những điều kiểu không viết được: thế nào là một kết quả hợp lệ, đơn vị là gì, hàm có được chờ không, lỗi báo ra bằng cách nào. Trình biên dịch chỉ kiểm tra phần đầu; phần còn lại phải viết thành lời và thành test.</p>
+      <p>Hợp đồng của cổng đọc nhiệt độ nằm ngay trong <code>thermal_ports.h</code>:</p>
+      <pre><code class="language-c" data-filename="thermal_ports.h (trích)">/* Hợp đồng của read(), mọi bản cài đặt đều phải giữ:
+ *   1. Không chặn: quay về ngay, không đợi phần cứng.
+ *   2. Trả TS_OK thì *milli_c là một phép đo mới, đơn vị milli-độ C,
+ *      nằm trong [TS_MIN_MC, TS_MAX_MC].
+ *   3. Trả mã khác TS_OK thì không ghi vào *milli_c.
+ */</code></pre>
+      <p>Ba bản cài đặt dưới đây đều biên dịch được, đều có cùng kiểu hàm, và mỗi bản phá đúng một điều của hợp đồng:</p>
+      <table>
+        <thead><tr><th>Bản</th><th>Sai ở đâu</th><th>Điều phá</th></tr></thead>
+        <tbody>
+          <tr><td><code>zero</code></td><td>khi ADC lỗi vẫn trả <code>TS_OK</code> kèm <code>0</code> để “cho yên chuyện”</td><td>điều 2: lỗi bị giấu thành một phép đo</td></tr>
+          <tr><td><code>deci</code></td><td>trả đơn vị phần mười độ C thay vì milli-độ C</td><td>điều 2: sai đơn vị</td></tr>
+          <tr><td><code>spin</code></td><td>quay vòng đợi chuyển đổi xong (48 ms) rồi mới trả</td><td>điều 1: chặn</td></tr>
+        </tbody>
+      </table>
+
+      <section class="sim" id="sim-lsp" aria-label="Mô phỏng Liskov: thay adc_source bằng ba bản sai hợp đồng và chạy cùng một kịch bản">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Bản cài đặt">
+            <label>Bản cài đặt đang lắp
+              <select name="impl">
+                <option value="adc" selected>adc (đúng hợp đồng)</option>
+                <option value="zero">zero (giấu lỗi thành 0)</option>
+                <option value="deci">deci (sai đơn vị)</option>
+                <option value="spin">spin (chặn 48 ms)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Nhiệt độ thật và nhiệt độ bộ điều khiển nhìn thấy theo từng nhịp"></canvas>
+        <canvas class="h-sm" role="img" aria-label="Lệnh quạt theo từng nhịp của bản đang chọn và của bản đúng"></canvas>
+        <div class="legend">
+          <span style="--c: var(--faint)">nhiệt độ thật</span>
+          <span style="--c: var(--indigo)">bộ điều khiển thấy</span>
+          <span style="--c: var(--accent)">quạt (bản đang chọn)</span>
+          <span style="--c: var(--green)">quạt (bản đúng)</span>
+        </div>
+        <table class="tests">
+          <thead><tr><th>Bản</th><th>Đo đúng</th><th>Lỗi không báo là OK</th><th>Không chặn</th><th>Thời gian một lần read()</th></tr></thead>
+          <tbody data-out="tests"></tbody>
+        </table>
+        <div class="sim-stats">
+          <span>Nhịp quạt tắt dù nhiệt độ thật &ge; 95 °C: <b data-out="danger">–</b></span>
+          <span>Nhịp quạt khác bản đúng: <b data-out="diff">–</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> chọn <code>deci</code>: bộ test báo rớt ở “đo đúng”, còn bộ điều khiển thấy nhiệt độ bằng 1/100 sự thật nên quạt chỉ chạy khi cảm biến đứt (nhịp 8–11, vùng nền đỏ). Chọn <code>zero</code>: bộ test chỉ rớt ở ô “lỗi không báo là OK”, và đồ thị cho thấy quạt tắt từ nhịp 8 rồi không bật lại cho tới hết nhịp 13, trong khi nhiệt độ thật vẫn trên 85 °C. Chọn <code>spin</code>: hai đồ thị y hệt bản đúng, chỉ cột thời gian là khác (48 000 µs so với 10 µs).</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · vì sao <code>zero</code> và <code>deci</code> qua được kiểm tra miền giá trị</p>
+        <p><b>deci.</b> Ở nhịp 5 nhiệt độ thật là 96 000 mC, ADC trả <code>raw = 2931</code>. Bản đúng tính <code>-40000 + 2931 × 190000 / 4095 = 95 992</code>. Bản <code>deci</code> chia thêm 100 và trả <code>959</code>. Số 959 nằm trong <code>[-40000, 150000]</code>, nên một lệnh <code>assert</code> về miền không bắt được, và cả hai cùng kiểu <code>int32_t</code> nên trình biên dịch cũng không. Chính sách so <code>959 &ge; 95000</code>, sai, nên quạt không bật.</p>
+        <p><b>zero.</b> Bảng dưới là các nhịp quanh lúc cảm biến đứt (nhịp 8–11). Chính sách hysteresis có trạng thái “đang bật”; con số 0 giả đã xoá trạng thái đó:</p>
+        <table class="dense">
+          <thead><tr><th>Nhịp</th><th>Nhiệt độ thật (mC)</th><th>adc: thấy, quạt</th><th>zero: thấy, quạt</th></tr></thead>
+          <tbody>
+            <tr><td>7</td><td>96 000</td><td>95 992, 100</td><td>95 992, 100</td></tr>
+            <tr><td>8</td><td>98 000</td><td>lỗi, 100</td><td>0, <b>0</b></td></tr>
+            <tr><td>11</td><td>91 000</td><td>lỗi, 100</td><td>0, <b>0</b></td></tr>
+            <tr><td>12</td><td>88 000</td><td>88 012, 100</td><td>88 012, <b>0</b></td></tr>
+            <tr><td>13</td><td>86 000</td><td>86 017, 100</td><td>86 017, <b>0</b></td></tr>
+            <tr><td>14</td><td>84 000</td><td>84 021, 0</td><td>84 021, 0</td></tr>
+          </tbody>
+        </table>
+        <p>Ở nhịp 8, <code>0 &le; 85000</code> nên <code>on = 0</code>. Sang nhịp 12 cảm biến đã đọc đúng 88 012, nằm giữa hai ngưỡng 85 000 và 95 000, hysteresis giữ trạng thái cũ, mà trạng thái cũ giờ là “tắt”. Một giá trị giả trong 4 nhịp làm sai thêm 2 nhịp sau khi lỗi đã hết: tổng 6 nhịp quạt khác bản đúng.</p>
+      </div>
+      <p>Cách phòng thực dụng là <b>test hợp đồng</b>: một bộ test viết theo cổng, không theo bản cài đặt, chạy trên mọi bản (xem <code>contract_test.c</code>). Bản mới chỉ được thay <code>adc_source</code> khi qua cả ba bài. Ngoài ra, ba dấu hiệu hay gặp của vi phạm Liskov: bên dùng có đoạn <code>if (src == &amp;special_source)</code>, bản cài đặt trả một giá trị đặc biệt để báo hiệu (<code>0</code>, <code>-1</code>), hoặc bản cài đặt có hàm “không hỗ trợ” mà chỉ trả lỗi.</p>
+
+      <h2 id="isp">I · Interface Segregation: đừng bắt ai gánh hàm họ không dùng</h2>
+      <p>Bên dùng không nên bị buộc phụ thuộc vào hàm nó không gọi. Một giao diện to, gom mọi thứ cảm biến làm được, trở thành gánh nặng cho những ai chỉ cần một phần: họ phải build lại và test lại khi phần khác đổi, và bản giả để test của họ phải cài đặt cả những hàm chẳng liên quan.</p>
+      <pre><code class="language-c" data-filename="sensor_ops.h (giao diện to)">typedef struct {
+    ts_status_t (*read)(void *ctx, int32_t *milli_c);
+    int         (*calibrate)(void *ctx, int32_t ref_mc);
+    int         (*self_test)(void *ctx);
+    void        (*power_down)(void *ctx);
+    int         (*set_rate_hz)(void *ctx, uint16_t hz);
+    uint32_t    (*get_id)(void *ctx);
+} sensor_ops_t;</code></pre>
+      <p>Bốn bên dùng khác nhau: bộ điều khiển nhiệt chỉ cần <code>read</code>; công cụ hiệu chuẩn cuối dây chuyền cần <code>read</code>, <code>calibrate</code>, <code>self_test</code>, <code>get_id</code>; quản lý năng lượng cần <code>power_down</code>, <code>set_rate_hz</code>; chẩn đoán cần <code>self_test</code>, <code>get_id</code>. Tách giao diện thành bốn vai trò nhỏ, mỗi bên chỉ thấy vai trò nó dùng:</p>
+      <pre><code class="language-c" data-filename="sensor_roles.h (bốn vai trò)">typedef struct { ts_status_t (*read)(void *ctx, int32_t *milli_c); }           sensor_read_ops_t;
+typedef struct { int (*self_test)(void *ctx); uint32_t (*get_id)(void *ctx); } sensor_identity_ops_t;
+typedef struct { int (*calibrate)(void *ctx, int32_t ref_mc); }                sensor_calibration_ops_t;
+typedef struct { void (*power_down)(void *ctx); int (*set_rate_hz)(void *ctx, uint16_t hz); } sensor_power_ops_t;</code></pre>
+      <p>Một driver thật vẫn có thể cài đặt cả bốn vai trò; bốn vai trò chỉ quyết định bên dùng nhìn thấy gì. Lưu ý <code>temp_source_ops_t</code> của module nhiệt độ chính là vai trò <code>sensor_read_ops_t</code>.</p>
+
+      <section class="sim" id="sim-isp" aria-label="Mô phỏng Interface Segregation: đổi một hàm thì ai phải build lại, và bản giả phải viết bao nhiêu hàm">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Thí nghiệm">
+            <label>Đổi chữ ký của
+              <select name="fn">
+                <option value="read">read</option>
+                <option value="calibrate" selected>calibrate</option>
+                <option value="self_test">self_test</option>
+                <option value="power_down">power_down</option>
+                <option value="set_rate_hz">set_rate_hz</option>
+                <option value="get_id">get_id</option>
+              </select>
+            </label>
+            <label>Viết bản giả cho
+              <select name="client">
+                <option value="thermal_ctl" selected>thermal_ctl</option>
+                <option value="factory_tool">factory_tool</option>
+                <option value="power_mgr">power_mgr</option>
+                <option value="diag">diag</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <table class="isp">
+          <thead data-out="ispHead"></thead>
+          <tbody data-out="ispBody"></tbody>
+        </table>
+        <div class="pane">
+          <p class="pane-title">Bản giả cho <b data-out="who"></b></p>
+          <div class="two">
+            <div><p class="pane-sub">giao diện to</p><div class="listing" data-out="fatCode"></div></div>
+            <div><p class="pane-sub">vai trò nhỏ</p><div class="listing" data-out="segCode"></div></div>
+          </div>
+        </div>
+        <div class="sim-stats">
+          <span>Build lại khi đổi <b data-out="fn2">–</b>, giao diện to: <b data-out="fatRebuild">–</b></span>
+          <span>vai trò nhỏ: <b data-out="segRebuild">–</b></span>
+          <span>Hàm bản giả phải viết, giao diện to: <b data-out="fatStubs">–</b></span>
+          <span>vai trò nhỏ: <b data-out="segStubs">–</b></span>
+        </div>
+      </section>
+      <p class="try"><b>Thử:</b> giữ “đổi <code>calibrate</code>”: chỉ <code>factory_tool</code> thật sự dùng nó, nhưng ở giao diện to cả ba bên còn lại cũng phải build lại. Rồi đổi sang “viết bản giả cho <code>thermal_ctl</code>”: giao diện to buộc bạn định nghĩa 6 hàm, 5 trong số đó là hàm rỗng chỉ để cho đủ bảng.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · bản giả cho <code>thermal_ctl</code> và việc đổi <code>calibrate</code></p>
+        <ol>
+          <li>Giao diện to: bảng thao tác có 6 con trỏ, nên bản giả phải định nghĩa 6 hàm (1 hàm <code>read</code> thật, 5 hàm rỗng) và một bảng 6 dòng bọc trong 2 dòng ngoặc: <code>6 + 6 + 2 = 14</code> dòng.</li>
+          <li>Vai trò nhỏ: <code>thermal_ctl</code> chỉ nhận <code>sensor_read_ops_t</code>, bản giả chỉ có 1 hàm và bảng 1 dòng: <code>1 + 1 + 2 = 4</code> dòng, không hàm rỗng.</li>
+          <li>Đổi chữ ký <code>calibrate</code>. Giao diện to: <code>factory_tool</code> dùng nó nên phải sửa (1); <code>thermal_ctl</code>, <code>power_mgr</code>, <code>diag</code> không dùng nhưng cùng include <code>sensor_ops_t</code> nên phải build lại và test lại (3). Vai trò nhỏ: <code>calibrate</code> nằm riêng trong <code>sensor_calibration_ops_t</code>, chỉ <code>factory_tool</code> thấy nó: 1 sửa, 0 build lại.</li>
+        </ol>
+      </div>
+
+      <h2 id="dip">D · Dependency Inversion: đảo hướng mũi tên phụ thuộc</h2>
+      <p>Nguyên tắc có hai vế. Một: module cấp cao không nên phụ thuộc module cấp thấp, cả hai nên phụ thuộc vào abstraction. Hai: abstraction không nên phụ thuộc chi tiết, chi tiết nên phụ thuộc abstraction. “Cấp cao” là phần chứa luật của sản phẩm (<code>thermal_ctl.c</code>), “cấp thấp” là phần nói chuyện với chip (driver ADC). Điểm mấu chốt: cổng do <b>bên cấp cao sở hữu</b>, được viết theo nhu cầu của nó. Driver phải khớp theo cổng, chứ không phải controller khớp theo driver.</p>
+      <p>Ở mức dữ liệu, giá trị vẫn đi từ driver lên controller. Ở mức mã nguồn, mũi tên <code>#include</code> bị đảo: trước kia controller include driver, giờ driver include cổng của controller.</p>
+      <pre><code class="language-c" data-filename="trước: logic sản phẩm gọi thẳng driver">#include "adc_driver.h"            /* kéo theo thanh ghi của chip */
+
+void thermal_step(void)
+{
+    uint16_t raw = adc_read_blocking(3);   /* biến mất khi không có chip */
+    ...
+}</code></pre>
+      <pre><code class="language-c" data-filename="sau: logic sản phẩm chỉ biết cổng">#include "thermal_ctl.h"            /* chỉ kéo theo thermal_ports.h */
+
+void thermal_ctl_step(thermal_ctl_t *c, uint32_t tick)
+{
+    ts_status_t st = c-&gt;src.ops-&gt;read(c-&gt;src.ctx, &amp;milli_c);   /* ai cũng được, miễn đúng hợp đồng */
+    ...
+}</code></pre>
+      <p>Đừng nhầm ba khái niệm hay đi cùng nhau. <b>DIP</b> là nguyên tắc về hướng phụ thuộc. <b>Dependency injection</b> là kỹ thuật đưa bản cài đặt vào từ bên ngoài, như hàm <code>thermal_init</code> ở <code>main</code> lắp các cổng cho controller. <b>IoC container</b> là công cụ tự động hoá việc lắp ráp đó; firmware hầu như không cần, vì lắp ráp bằng tay trong một file <code>main</code> vừa ngắn vừa đọc được.</p>
+
+      <section class="sim" id="sim-dip" aria-label="Mô phỏng Dependency Inversion: build bài test trên PC trước và sau khi đảo phụ thuộc">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Thí nghiệm">
+            <label>Thiết kế
+              <select name="design">
+                <option value="before" selected>Trước: controller include driver</option>
+                <option value="after">Sau: cả hai cùng trỏ vào cổng</option>
+              </select>
+            </label>
+            <label>Build cho
+              <select name="target">
+                <option value="board">Board thật</option>
+                <option value="pc" selected>PC (test tự động)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="graph-wrap"><svg class="graph" data-g="dip" role="img" aria-label="Đồ thị phụ thuộc của controller"></svg></div>
+        <div class="legend">
+          <span style="--c: var(--indigo)">phải biên dịch cho target này</span>
+          <span style="--c: var(--accent)">cần phần cứng nhưng target không có</span>
+          <span style="--c: var(--ochre)">gắn với chip</span>
+        </div>
+        <div class="sim-stats">
+          <span>Module phải biên dịch: <b data-out="count">–</b></span>
+          <span>Controller biết đến: <b data-out="sees">–</b></span>
+          <span>Cần phần cứng: <b data-out="hw">–</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> để “Trước” và đổi “Build cho” sang PC: tập biên dịch kéo theo <code>chip_regs</code> (gắn với chip), nút đỏ báo bài test không dựng được. Chuyển sang “Sau”: tập biên dịch cho PC không còn chạm chip, vì <code>replay_src</code> cài đặt cổng thay cho <code>adc_driver</code>. Chọn “Board thật”: tập biên dịch vẫn gồm <code>adc_driver</code> và <code>chip_regs</code>, nhưng <code>controller</code> chỉ nhìn thấy <code>temp_port</code>.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · dựng bài test của <code>controller</code> trên PC</p>
+        <ol>
+          <li><b>Trước.</b> Từ <code>main_test</code> đi theo mũi tên: <code>controller</code> → <code>adc_driver</code> → <code>chip_regs</code>. Tập biên dịch có 4 module, trong đó <code>chip_regs</code> định nghĩa thanh ghi chỉ có trên chip nên PC không biên dịch được. Controller biết đến 2 module (<code>adc_driver</code>, <code>chip_regs</code>).</li>
+          <li><b>Sau.</b> Từ <code>main_test</code>: <code>controller</code> → <code>temp_port</code>, và <code>main_test</code> lắp <code>replay_src</code>, cũng chỉ trỏ vào <code>temp_port</code>. Tập biên dịch cũng 4 module (<code>main_test</code>, <code>controller</code>, <code>temp_port</code>, <code>replay_src</code>) nhưng không có phần cứng. Controller biết đến đúng 1 module.</li>
+          <li>Số module không đổi, đổi là <i>ai</i> nằm trong tập. Đó là lý do DIP thường được nhắc cùng khả năng test: không có đường nối thì không thay được phần cứng bằng bản giả.</li>
+        </ol>
+      </div>
+
+      <h2 id="module">Ghép lại: một module điều khiển quạt</h2>
+      <p>Năm nguyên tắc ở trên không sống riêng lẻ. Module dưới đây dùng cả năm: <code>thermal_ctl</code> là phần cấp cao, mỗi nhịp đọc nhiệt độ, nhờ chính sách quyết định, ra lệnh cho quạt và ghi log; nó chỉ biết bốn <b>cổng</b>. Mỗi cổng có một hoặc nhiều bản cài đặt, và một file <code>main</code> chọn bản nào được lắp vào. Các file C của module (danh sách tải về ở cuối bài) biên dịch sạch với <code>-std=c99 -Wall -Wextra -pedantic -Werror</code>, và bản chạy trên PC cho ra đúng các con số dùng trong bài.</p>
+
+      <figure class="diagram">
+        <figcaption>Module nhiệt độ: bốn cổng (do controller sở hữu) nằm giữa controller và các bản cài đặt</figcaption>
+        <svg viewBox="0 0 680 370" role="img" aria-labelledby="mod-t mod-d">
+          <title id="mod-t">Sơ đồ khối của module điều khiển quạt</title>
+          <desc id="mod-d">Điểm lắp ráp main tạo các bản cài đặt và đưa bốn cổng vào bộ điều khiển thermal_ctl. Bộ điều khiển chỉ phụ thuộc bốn cổng: temp_source_t, policy_t, fan_t và log_sink_t. Dưới mỗi cổng là các bản cài đặt có thể cắm vào: adc_source hoặc replay_source cho cổng nhiệt độ; threshold, hysteresis hoặc ramp cho cổng chính sách; pwm_fan hoặc quạt giả cho cổng quạt; uart_log, ram_log hoặc tee_log cho cổng log. Các mũi tên từ bản cài đặt trỏ lên cổng, cho thấy bản cài đặt phụ thuộc vào cổng chứ không phải ngược lại.</desc>
+          <defs>
+            <marker id="mod-head" class="head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+            <marker id="mod-head-key" class="head key" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+          </defs>
+
+          <rect class="box" x="190" y="10" width="300" height="56"/>
+          <rect class="box solid" x="190" y="10" width="300" height="26"/>
+          <text class="inv" x="200" y="28">main · điểm lắp ráp</text>
+          <text class="sm muted" x="200" y="55">main_board.c · main_host.c</text>
+
+          <rect class="box key" x="240" y="108" width="200" height="56"/>
+          <rect class="box solid" x="240" y="108" width="200" height="26"/>
+          <text class="inv" x="250" y="126">thermal_ctl</text>
+          <text class="sm muted" x="250" y="153">đọc → quyết định → lệnh → log</text>
+          <path class="line key" d="M340 66V108" marker-end="url(#mod-head-key)"/>
+          <text class="sm muted" x="350" y="92">đưa bốn cổng vào</text>
+
+          <text class="tag" x="104" y="204">CỔNG</text>
+          <path class="line" d="M340 164V187H85V210" marker-end="url(#mod-head)"/>
+          <path class="line" d="M340 164V187H255V210" marker-end="url(#mod-head)"/>
+          <path class="line" d="M340 164V187H425V210" marker-end="url(#mod-head)"/>
+          <path class="line" d="M340 164V187H595V210" marker-end="url(#mod-head)"/>
+
+          <rect class="box dash" x="10" y="210" width="150" height="36"/>
+          <text x="85" y="233" text-anchor="middle">temp_source_t</text>
+          <rect class="box dash" x="180" y="210" width="150" height="36"/>
+          <text x="255" y="233" text-anchor="middle">policy_t</text>
+          <rect class="box dash" x="350" y="210" width="150" height="36"/>
+          <text x="425" y="233" text-anchor="middle">fan_t</text>
+          <rect class="box dash" x="520" y="210" width="150" height="36"/>
+          <text x="595" y="233" text-anchor="middle">log_sink_t</text>
+
+          <text class="tag" x="104" y="276">BẢN CÀI ĐẶT</text>
+          <path class="line" d="M85 290V246" marker-end="url(#mod-head)"/>
+          <path class="line" d="M255 290V246" marker-end="url(#mod-head)"/>
+          <path class="line" d="M425 290V246" marker-end="url(#mod-head)"/>
+          <path class="line" d="M595 290V246" marker-end="url(#mod-head)"/>
+
+          <rect class="box" x="10" y="290" width="150" height="66"/>
+          <text class="sm" x="20" y="310">adc_source</text>
+          <text class="sm muted" x="20" y="328">replay_source</text>
+          <text class="sm muted" x="20" y="346">(nguồn giả, để test)</text>
+          <rect class="box" x="180" y="290" width="150" height="66"/>
+          <text class="sm" x="190" y="310">threshold</text>
+          <text class="sm" x="190" y="328">hysteresis</text>
+          <text class="sm" x="190" y="346">ramp</text>
+          <rect class="box" x="350" y="290" width="150" height="66"/>
+          <text class="sm" x="360" y="310">pwm_fan</text>
+          <text class="sm muted" x="360" y="328">quạt giả</text>
+          <text class="sm muted" x="360" y="346">(ghi lại lệnh nhận)</text>
+          <rect class="box" x="520" y="290" width="150" height="66"/>
+          <text class="sm" x="530" y="310">uart_log</text>
+          <text class="sm" x="530" y="328">ram_log</text>
+          <text class="sm" x="530" y="346">tee_log</text>
+        </svg>
+      </figure>
+
+      <figure class="diagram">
+        <figcaption>Một nhịp điều khiển: thứ tự các lời gọi</figcaption>
+        <svg viewBox="0 0 680 330" role="img" aria-labelledby="seq-m-t seq-m-d">
+          <title id="seq-m-t">Sơ đồ tuần tự của thermal_ctl_step</title>
+          <desc id="seq-m-d">main gọi step với số nhịp. Bộ điều khiển gọi read trên cổng nhiệt độ và nhận về trạng thái cùng giá trị. Nếu đọc được, nó gọi decide trên cổng chính sách và nhận về phần trăm quạt; nếu không, nó dùng giá trị an toàn là 100 phần trăm. Sau đó nó gọi set_percent trên cổng quạt rồi emit trên cổng log, và trả quyền cho main.</desc>
+          <defs>
+            <marker id="seq-m-head" class="head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+            <marker id="seq-m-head-key" class="head key" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+          </defs>
+          <path class="life" d="M50 40V320M175 40V320M305 40V320M425 40V320M525 40V320M625 40V320"/>
+          <rect class="box solid" x="15" y="12" width="70" height="28"/><text class="inv" x="50" y="31" text-anchor="middle">main</text>
+          <rect class="box solid" x="120" y="12" width="110" height="28"/><text class="inv" x="175" y="31" text-anchor="middle">thermal_ctl</text>
+          <rect class="box solid" x="245" y="12" width="120" height="28"/><text class="inv" x="305" y="31" text-anchor="middle">temp_source</text>
+          <rect class="box solid" x="390" y="12" width="70" height="28"/><text class="inv" x="425" y="31" text-anchor="middle">policy</text>
+          <rect class="box solid" x="495" y="12" width="60" height="28"/><text class="inv" x="525" y="31" text-anchor="middle">fan</text>
+          <rect class="box solid" x="585" y="12" width="80" height="28"/><text class="inv" x="625" y="31" text-anchor="middle">log_sink</text>
+
+          <path class="line key" d="M50 72H175" marker-end="url(#seq-m-head-key)"/>
+          <text x="112" y="64" text-anchor="middle">step(tick)</text>
+          <path class="line" d="M175 106H305" marker-end="url(#seq-m-head)"/>
+          <text x="240" y="98" text-anchor="middle">read(&amp;mc)</text>
+          <path class="line dash" d="M305 138H175" marker-end="url(#seq-m-head)"/>
+          <text x="240" y="130" text-anchor="middle">TS_OK, mc</text>
+          <path class="line" d="M175 174H425" marker-end="url(#seq-m-head)"/>
+          <text x="300" y="166" text-anchor="middle">decide(mc)</text>
+          <path class="line dash" d="M425 206H175" marker-end="url(#seq-m-head)"/>
+          <text x="300" y="198" text-anchor="middle">percent</text>
+          <path class="line" d="M175 242H525" marker-end="url(#seq-m-head)"/>
+          <text x="350" y="234" text-anchor="middle">set_percent(percent)</text>
+          <path class="line" d="M175 278H625" marker-end="url(#seq-m-head)"/>
+          <text x="400" y="270" text-anchor="middle">emit(&amp;ev)</text>
+          <path class="line dash" d="M175 312H50" marker-end="url(#seq-m-head)"/>
+          <text x="112" y="304" text-anchor="middle">trả về</text>
+        </svg>
+      </figure>
+
+      <p>Hai file quan trọng nhất là cổng và controller. Cổng thuộc về controller (nó nói “tôi cần gì”), còn controller chỉ có 17 dòng code và không có một câu <code>if</code> nào về loại cảm biến, loại quạt hay nơi ghi log:</p>
+      <pre><code data-from="#c-ports" data-filename="thermal_ports.h"></code></pre>
+      <pre><code data-from="#c-ctl-c" data-filename="thermal_ctl.c"></code></pre>
+      <p>Mỗi nguyên tắc nằm ở một chỗ cụ thể trong module:</p>
+      <table>
+        <thead><tr><th>Nguyên tắc</th><th>Nó thể hiện ở đâu</th></tr></thead>
+        <tbody>
+          <tr><td><b>S</b></td><td><code>thermal_ctl.c</code> chỉ điều phối một nhịp. Luật quyết định ở <code>policies.c</code>, đọc nhiệt độ ở <code>adc_source.c</code>, ghi log ở các sink: mỗi file một nhóm yêu cầu.</td></tr>
+          <tr><td><b>O</b></td><td>Thêm đích log là viết một sink và thêm một dòng ở <code>main</code> (<code>tee_log_add</code>). Thêm chính sách là thêm một hàm và một bảng trong <code>policies.c</code>. <code>thermal_ctl.c</code> không đổi.</td></tr>
+          <tr><td><b>L</b></td><td><code>contract_test.c</code> chạy cùng một bộ test hợp đồng lên mọi nguồn nhiệt độ; <code>tee_log</code> thay được cho bất kỳ sink nào vì nó cũng là một <code>log_sink_t</code>.</td></tr>
+          <tr><td><b>I</b></td><td>Bốn cổng, mỗi cổng một hàm. Controller không thấy <code>calibrate</code> hay <code>power_down</code>; bản giả của mỗi cổng chỉ có một hàm.</td></tr>
+          <tr><td><b>D</b></td><td><code>thermal_ports.h</code> thuộc về controller; driver include nó chứ không ngược lại. <code>main</code> là nơi duy nhất thấy tất cả, và <code>check_deps.py</code> canh hướng các mũi tên (xem <a href="#firmware">phần firmware</a>).</td></tr>
+        </tbody>
+      </table>
+
+      <section class="sim" id="sim-module" aria-label="Mô phỏng module nhiệt độ: chọn nguồn, chính sách, đích log và xem controller chạy kịch bản 20 nhịp">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Điểm lắp ráp">
+            <span class="ctl-title">Điểm lắp ráp (main): chọn bản cài đặt cho từng cổng</span>
+            <label>Nguồn nhiệt độ
+              <select name="source">
+                <option value="normal" selected>replay: bình thường</option>
+                <option value="fault">replay: cảm biến lỗi ở nhịp 8–11</option>
+                <option value="cold">replay: cảm biến lỗi ở nhịp 1–3</option>
+              </select>
+            </label>
+            <label>Chính sách
+              <select name="policy">
+                <option value="threshold">threshold 95 °C</option>
+                <option value="hysteresis" selected>hysteresis 95 / 85 °C</option>
+                <option value="ramp">ramp 80 → 100 °C</option>
+              </select>
+            </label>
+            <label>Đích log
+              <select name="sink">
+                <option value="ram" selected>ram_log (vòng đệm 8 bản ghi)</option>
+                <option value="uart">uart_log (văn bản)</option>
+                <option value="none">sink rỗng</option>
+              </select>
+            </label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Nhịp đang xem">
+            <label>Nhịp đang xem <input name="tick" type="range" min="0" max="19" step="1" value="5"><output data-out="tickOut"></output></label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Nhiệt độ theo từng nhịp, các ngưỡng 85 và 95 độ C, và nhịp đang xem"></canvas>
+        <canvas class="h-sm" role="img" aria-label="Lệnh quạt theo từng nhịp"></canvas>
+        <div class="legend">
+          <span style="--c: var(--indigo)">nhiệt độ controller nhận được</span>
+          <span style="--c: var(--accent)">lệnh quạt</span>
+          <span style="--c: var(--faint)">ngưỡng 85 và 95 °C</span>
+        </div>
+        <div class="log" data-out="log"></div>
+        <div class="sim-stats">
+          <span>Lần đổi lệnh quạt: <b data-out="changes">–</b></span>
+          <span>Nhịp cảm biến lỗi: <b data-out="faults">–</b></span>
+          <span>Dòng của thermal_ctl.c bị sửa: <b>0</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> đổi chính sách từ <code>threshold</code> sang <code>hysteresis</code> và nhìn số lần đổi lệnh quạt: 4 xuống còn 2, vì nhiệt độ dao động quanh 95 °C (nhịp 5–10). Đổi nguồn sang “lỗi ở nhịp 1–3”: quạt bật 100% đúng ba nhịp rồi về 0, đó là chế độ an toàn khi mất cảm biến. Đổi đích log sang <code>uart_log</code> để thấy cùng sự kiện ở dạng văn bản. Ba lần đổi, <code>thermal_ctl.c</code> vẫn 0 dòng bị sửa.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · ba nhịp của chính sách hysteresis 95 / 85</p>
+        <ol>
+          <li>Nhịp 4, nhiệt độ 94 000. Chính sách đang tắt (<code>on = 0</code>). <code>94 000 &lt; 95 000</code> nên không bật; <code>94 000 &gt; 85 000</code> nên cũng không tắt thêm. Lệnh quạt: 0.</li>
+          <li>Nhịp 5, nhiệt độ 96 000. <code>96 000 &ge; 95 000</code> nên <code>on = 1</code>, lệnh quạt 100. Sự kiện ghi log là <code>{tick 5, 96000, 100, 0}</code>.</li>
+          <li>Nhịp 6, nhiệt độ 94 000, rơi lại vào khoảng giữa hai ngưỡng. Hysteresis <b>giữ</b> trạng thái cũ nên quạt vẫn 100. Chính sách <code>threshold</code> thì trả 0 ở nhịp này, rồi lại 100 ở nhịp 7: đó là lý do nó đổi lệnh 4 lần.</li>
+          <li>Cảm biến lỗi (<code>TS_FAULT</code>): controller không gọi <code>decide</code>, tự đặt lệnh 100 và ghi <code>fault = 2</code>. Vì <code>decide</code> không được gọi nên trạng thái của chính sách không bị đụng tới, ngược lại với bản <code>zero</code> ở phần Liskov.</li>
+          <li>Nhịp 14, nhiệt độ 84 000 &le; 85 000 nên <code>on = 0</code>, lệnh quạt 0. Cả kịch bản hysteresis có đúng 2 lần đổi lệnh: nhịp 5 (0 → 100) và nhịp 14 (100 → 0).</li>
+        </ol>
+      </div>
+
+      <h2 id="embedded">Embedded: SOLID khi không có heap và không có class</h2>
+      <p>Trên vi điều khiển, nhất là khi viết bằng C, những công cụ quen thuộc của SOLID trong sách (class, kế thừa, đối tượng cấp phát lúc chạy) hoặc không có sẵn, hoặc không nên dùng. Nhưng nguyên tắc không phụ thuộc vào cú pháp: bạn chỉ cần một cách khác để cắt đường nối. Trong module trên, mỗi cổng là một cặp <code>ops</code> + <code>ctx</code>: <code>ops</code> là bảng con trỏ hàm khai báo <code>static const</code> (nên nằm trong flash, không tốn RAM), <code>ctx</code> là con trỏ tới trạng thái riêng của bản cài đặt. Mọi đối tượng là struct tĩnh trong <code>main_board.c</code>, không có <code>malloc</code>, và kích thước đo được: trên bản biên dịch 32 bit, <code>sizeof(thermal_ctl_t)</code> là 32 byte (4 cổng × 8 byte), một bảng <code>ops</code> một hàm là 4 byte. Nếu dự án của bạn dùng C++, cặp <code>ops</code> + <code>ctx</code> chính là một lớp trừu tượng có hàm ảo; ý tưởng giống hệt, chỉ là trình biên dịch giữ bảng và con trỏ giúp bạn.</p>
+      <p>Con trỏ hàm chỉ là một trong ba cách đặt đường nối, và mỗi cách chọn bản cài đặt vào một thời điểm khác nhau:</p>
+      <table>
+        <thead><tr><th>Cách nối</th><th>Ví dụ trong bài</th><th>Chọn bản cài đặt lúc</th><th>Nhiều bản cùng lúc</th></tr></thead>
+        <tbody>
+          <tr><td><code>ops</code> + <code>ctx</code> (con trỏ hàm)</td><td><code>temp_source_t</code>, <code>log_sink_t</code></td><td>chạy (thường là lúc khởi tạo)</td><td>có, như <code>tee_log</code></td></tr>
+          <tr><td>cùng header, khác file <code>.c</code></td><td><code>hal_adc.h</code>: mỗi chip một <code>hal_adc.c</code></td><td>link, do build chọn file</td><td>không, mỗi bản build một bản</td></tr>
+          <tr><td><code>#if</code>, <code>static inline</code>, macro</td><td>hằng cấu hình theo biến thể</td><td>biên dịch</td><td>không</td></tr>
+        </tbody>
+      </table>
+      <p>Cả ba đều là đường nối hợp lệ. Điều quan trọng là có đường nối ở đúng chỗ, không phải dùng con trỏ hàm. Với HAL, nối lúc link là lựa chọn rất phổ biến vì cả chương trình chỉ có một MCU. Một lời gọi gián tiếp chậm hơn lời gọi trực tiếp vài chu kỳ; hãy đo trên vòng lặp nóng của bạn trước khi quyết định bỏ nó.</p>
+
+      <section class="sim" id="sim-target" aria-label="Mô phỏng embedded: cùng một lõi, ba target khác nhau">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Target">
+            <label>Target
+              <select name="target">
+                <option value="board" selected>Board hiện tại (chip A)</option>
+                <option value="board2">Board mới (đổi sang chip B)</option>
+                <option value="pc">PC (test tự động)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="two">
+          <div>
+            <p class="pane-sub">Lõi, giống nhau ở mọi target</p>
+            <ul class="files" data-out="core"></ul>
+          </div>
+          <div>
+            <p class="pane-sub">Riêng cho target này</p>
+            <ul class="files" data-out="own"></ul>
+          </div>
+        </div>
+        <div class="listing" data-out="cmd"></div>
+        <div class="sim-stats">
+          <span>Dòng code của lõi: <b data-out="coreLoc">–</b></span>
+          <span>Dòng riêng của target: <b data-out="ownLoc">–</b></span>
+          <span>Tỉ lệ dùng lại: <b data-out="share">–</b></span>
+          <span>Dòng của lõi phải sửa: <b>0</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> chuyển qua lại giữa ba target và để ý hai điều. Cột bên trái không đổi một ký tự nào. Từ board hiện tại sang chip B, danh sách file của bạn cũng không đổi, chỉ file HAL của nhà sản xuất (cột phải, dòng chữ nghiêng) là khác.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · tỉ lệ dùng lại</p>
+        <p>Đếm dòng code theo cách bỏ dòng trống và chú thích: lõi (9 file) có <code>166</code> dòng; phần riêng của board (7 file) có <code>93</code> dòng; phần riêng của PC (3 file) có <code>102</code> dòng.</p>
+        <ul>
+          <li>Board: <code>166 / (166 + 93) = 64.1%</code> code dùng lại.</li>
+          <li>PC: <code>166 / (166 + 102) = 61.9%</code>.</li>
+          <li>Đổi chip: 0 dòng của module đổi, vì chip chỉ xuất hiện ở <code>hal_adc.h</code>, <code>hal_pwm.h</code>, <code>hal_uart.h</code> và phần cài đặt của chúng.</li>
+        </ul>
+        <p>Phần “riêng của PC” (bản giả và harness test) chiếm hơn một phần ba tổng số dòng, và nó là phần bạn không phải nạp vào chip. Đó là cái giá hợp lý của việc kiểm tra được logic mà không cần board.</p>
+      </div>
+
+      <h2 id="firmware">Firmware: các tầng, luật phụ thuộc và công cụ canh nó</h2>
+      <p>Firmware thường được chia tầng: <b>ứng dụng</b> (luật sản phẩm), <b>dịch vụ</b> (log, chính sách), <b>driver</b> (nói chuyện với một loại thiết bị), <b>HAL</b> (che chip). Trong module trên: <code>thermal_ctl</code>, <code>policies</code>, <code>ram_log</code>, <code>tee_log</code> là tầng dịch vụ; <code>adc_source</code>, <code>pwm_fan</code>, <code>uart_log</code> là driver; <code>hal_*.h</code> là HAL; <code>main_*.c</code> ở trên cùng. Luật phụ thuộc của DIP viết thành quy tắc kiểm tra được:</p>
+      <ul>
+        <li>Dịch vụ chỉ được include <code>thermal_ports.h</code> (và header của chính nó).</li>
+        <li>Driver chỉ được include <code>thermal_ports.h</code>, HAL và header của chính nó. Không include dịch vụ, không include driver khác.</li>
+        <li>HAL và cổng không include gì của dự án.</li>
+        <li>Chỉ <code>main_*.c</code> được thấy tất cả.</li>
+      </ul>
+      <p>Nói trong sách thì dễ, giữ được qua một năm và mười người sửa thì cần công cụ. <code>check_deps.py</code> (cuối bài, 48 dòng Python) đọc các dòng <code>#include "..."</code> và báo vi phạm; thoát với mã 1 để gắn thẳng vào CI. Một hệ quả hữu ích: luật chỉ cho phép mũi tên đi xuống, nên mọi vòng phụ thuộc đều cần ít nhất một cạnh sai hướng, bắt được hướng là bắt được vòng.</p>
+
+      <section class="sim" id="sim-layers" aria-label="Mô phỏng firmware: kiểm tra hướng phụ thuộc giữa các tầng">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Các include sai hướng">
+            <span class="ctl-title">Include sai hướng đang có trong code (bỏ chọn để sửa)</span>
+            <label class="check"><input name="b1" type="checkbox" checked> thermal_ctl.c include hal_adc.h</label>
+            <label class="check"><input name="b2" type="checkbox" checked> policies.h include uart_log.h</label>
+            <label class="check"><input name="b3" type="checkbox"> adc_source.c include thermal_ctl.h</label>
+            <label class="check"><input name="b4" type="checkbox"> thermal_ports.h include ram_log.h</label>
+            <label class="check"><input name="b5" type="checkbox"> hal_uart.h include uart_log.h</label>
+          </div>
+        </div>
+        <div class="graph-wrap"><svg class="graph" data-g="layers" role="img" aria-label="Đồ thị include giữa các tầng firmware"></svg></div>
+        <div class="legend">
+          <span style="--c: var(--muted)">include đúng hướng</span>
+          <span style="--c: var(--accent)">include sai hướng</span>
+        </div>
+        <pre class="report" data-out="report"></pre>
+      </section>
+      <p class="try"><b>Thử:</b> bỏ chọn hai ô đầu để trở về trạng thái sạch (“OK”), rồi tick từng ô còn lại. <code>thermal_ports.h include ram_log.h</code> cho thấy cổng bị kéo ngược lên dịch vụ: nó vừa sai hướng, vừa tạo vòng <code>ram_log → thermal_ports → ram_log</code>. Hai nhóm kiểm tra này chính là cái <code>check_deps.py</code> làm, cùng một bảng luật.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · chạy checker bằng tay trên ba dòng include</p>
+        <ol>
+          <li><code>adc_source.c</code> có <code>#include "thermal_ports.h"</code>. Tầng của <code>adc_source.c</code> là <i>driver</i>, được include <code>port</code>, <code>hal</code> và header của chính nó. <code>thermal_ports.h</code> thuộc tầng <code>port</code>: <b>cho phép</b>.</li>
+          <li><code>thermal_ctl.c</code> có <code>#include "hal_adc.h"</code>. Tầng của <code>thermal_ctl.c</code> là <i>service</i>, chỉ được include <code>port</code> và chính nó. <code>hal_adc.h</code> thuộc tầng <code>hal</code>: <b>vi phạm</b>.</li>
+          <li><code>policies.h</code> có <code>#include "uart_log.h"</code>. <i>service</i> không được include <i>driver</i>: <b>vi phạm</b>.</li>
+        </ol>
+        <p>Chạy script trên một bản sao của module có đúng hai include sai (mục 2 và 3 ở trên) cho đầu ra:</p>
+<pre><code class="language-text">policies.h (service) không được include uart_log.h (driver)
+thermal_ctl.c (service) không được include hal_adc.h (hal)</code></pre>
+        <p>kèm mã thoát 1. Trên module sạch, nó in <code>OK: không có include sai hướng</code> và thoát 0.</p>
+      </div>
+
+      <h2 id="automotive">Automotive: biến thể xe, tầng AUTOSAR và bộ điều phối chẩn đoán</h2>
+      <p>Một phần mềm ECU sống nhiều năm trên nhiều biến thể xe. Các biến thể khác nhau ở cảm biến nào có mặt, bộ chấp hành nào, tham số hiệu chuẩn nào, dịch vụ chẩn đoán nào được bật, nhưng phần logic cốt lõi thì giống nhau. Đó đúng là bài toán của O và D: lõi đóng, biến thể là các bản cài đặt và bảng cấu hình cắm vào. Trong module trên, mỗi biến thể là một điểm lắp ráp (<code>main_*.c</code>, hoặc bảng <code>const</code> chọn bản cài đặt lúc build hoặc lúc ghi flash) cộng với tham số của chính sách; <code>thermal_ctl.c</code> không đổi.</p>
+      <p>AUTOSAR Classic Platform làm điều này ở quy mô cả ECU. Phần mềm chia thành tầng ứng dụng (các software component, SWC), RTE, và phần mềm cơ bản (BSW) gồm lớp dịch vụ, lớp trừu tượng ECU và lớp trừu tượng vi điều khiển (MCAL). SWC chỉ nói chuyện qua các cổng do RTE cung cấp và không gọi thẳng driver, nên cùng một SWC chạy được trên ECU khác nếu phần BSW bên dưới khác. Đặt cạnh module của bài, ý tưởng tương ứng gần nhau:</p>
+
+      <figure class="diagram">
+        <figcaption>Phân tầng kiểu AUTOSAR Classic và phần tương ứng trong module của bài</figcaption>
+        <svg viewBox="0 0 680 290" role="img" aria-labelledby="as-t as-d">
+          <title id="as-t">Các tầng phần mềm ECU và phần tương ứng trong module nhiệt độ</title>
+          <desc id="as-d">Từ trên xuống: tầng ứng dụng gồm các software component, tương ứng với thermal_ctl; RTE cung cấp cổng cho SWC, tương ứng với thermal_ports.h; phần mềm cơ bản gồm lớp dịch vụ, lớp trừu tượng ECU tương ứng với adc_source và pwm_fan, lớp trừu tượng vi điều khiển tương ứng với hal_adc.h, hal_pwm.h; dưới cùng là phần cứng vi điều khiển. Ghi chú: ứng dụng chỉ nhìn thấy các cổng, không nhìn thấy tầng dưới.</desc>
+          <rect class="box key" x="10" y="10" width="400" height="44"/>
+          <text x="22" y="30">Tầng ứng dụng · các SWC</text>
+          <text class="sm muted" x="22" y="46">chứa luật sản phẩm, không include driver</text>
+          <rect class="box dash" x="10" y="64" width="400" height="44"/>
+          <text x="22" y="84">RTE · cổng giữa SWC và hạ tầng</text>
+          <text class="sm muted" x="22" y="100">SWC chỉ biết các cổng này</text>
+          <rect class="box" x="10" y="118" width="400" height="30"/>
+          <text x="22" y="138">BSW · lớp dịch vụ (log, chẩn đoán, bộ nhớ)</text>
+          <rect class="box" x="10" y="156" width="400" height="30"/>
+          <text x="22" y="176">BSW · lớp trừu tượng ECU (cảm biến, bộ chấp hành)</text>
+          <rect class="box" x="10" y="194" width="400" height="30"/>
+          <text x="22" y="214">BSW · lớp trừu tượng vi điều khiển (MCAL)</text>
+          <rect class="box solid" x="10" y="232" width="400" height="30"/>
+          <text class="inv" x="22" y="252">Vi điều khiển</text>
+
+          <text class="tag" x="440" y="26">TRONG MODULE CỦA BÀI</text>
+          <text class="sm" x="440" y="46">thermal_ctl</text>
+          <text class="sm" x="440" y="84">thermal_ports.h</text>
+          <text class="sm" x="440" y="138">ram_log, tee_log</text>
+          <text class="sm" x="440" y="176">adc_source, pwm_fan</text>
+          <text class="sm" x="440" y="214">hal_adc.h, hal_pwm.h</text>
+          <text class="sm" x="440" y="252">chip A hoặc chip B</text>
+        </svg>
+      </figure>
+
+      <p>Một chỗ khác O xuất hiện rất tự nhiên là bộ điều phối chẩn đoán. Chẩn đoán trên xe (UDS, ISO 14229) là một chuỗi yêu cầu và phản hồi: byte đầu của yêu cầu là mã dịch vụ (SID); phản hồi đúng bắt đầu bằng <code>SID + 0x40</code>, còn từ chối bắt đầu bằng <code>0x7F</code>, SID, rồi mã lỗi (NRC). Mỗi biến thể xe bật một tập dịch vụ khác nhau, nên bộ điều phối viết theo bảng: tra SID trong bảng đăng ký, có thì gọi hàm xử lý, không thì trả <code>7F SID 11</code> (dịch vụ không được hỗ trợ). Thêm một dịch vụ là thêm một hàm và một dòng vào bảng; bộ điều phối không đổi.</p>
+      <pre><code class="language-c" data-filename="diag_dispatch.c (minh hoạ)">typedef struct {
+    uint8_t sid;
+    size_t (*handle)(const uint8_t *req, size_t len, uint8_t *rsp);   /* trả độ dài phản hồi */
+} diag_service_t;
+
+/* Bảng cố định lúc build, nằm trong flash: người review và công cụ phân tích tĩnh thấy mọi đích gọi. */
+static const diag_service_t SERVICES[] = {
+    { 0x10, session_control },
+    { 0x22, read_data_by_id },
+    { 0x3E, tester_present  },
+};
+
+size_t diag_dispatch(const uint8_t *req, size_t len, uint8_t *rsp)
+{
+    for (size_t i = 0; i &lt; sizeof SERVICES / sizeof SERVICES[0]; i++)
+        if (SERVICES[i].sid == req[0]) return SERVICES[i].handle(req, len, rsp);
+    rsp[0] = 0x7F; rsp[1] = req[0]; rsp[2] = 0x11;      /* serviceNotSupported */
+    return 3;
+}</code></pre>
+
+      <section class="sim" id="sim-diag" aria-label="Mô phỏng bộ điều phối chẩn đoán theo bảng: đăng ký dịch vụ và gửi yêu cầu">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Biến thể xe">
+            <label>Biến thể
+              <select name="variant">
+                <option value="base" selected>Cơ bản (3 dịch vụ)</option>
+                <option value="std">Tiêu chuẩn (4 dịch vụ)</option>
+                <option value="full">Đầy đủ (5 dịch vụ)</option>
+              </select>
+            </label>
+            <span class="ctl-title">Dịch vụ đã đăng ký trong bảng</span>
+            <label class="check"><input name="s10" type="checkbox" checked> 0x10 Session</label>
+            <label class="check"><input name="s11" type="checkbox"> 0x11 Reset</label>
+            <label class="check"><input name="s14" type="checkbox"> 0x14 Clear DTC</label>
+            <label class="check"><input name="s22" type="checkbox" checked> 0x22 Read DID</label>
+            <label class="check"><input name="s3e" type="checkbox" checked> 0x3E TesterPresent</label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Yêu cầu gửi tới ECU">
+            <label>Yêu cầu
+              <select name="req">
+                <option value="22 F1 90" selected>22 F1 90 · đọc VIN</option>
+                <option value="10 03">10 03 · vào phiên mở rộng</option>
+                <option value="3E 00">3E 00 · tester vẫn còn đó</option>
+                <option value="11 01">11 01 · reset cứng</option>
+                <option value="14 FF FF FF">14 FF FF FF · xoá mọi DTC</option>
+                <option value="22 F1 FF">22 F1 FF · DID không tồn tại</option>
+                <option value="10">10 · thiếu tham số</option>
+                <option value="27 01">27 01 · xin seed bảo mật</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="listing" data-out="table"></div>
+        <table class="isp">
+          <thead><tr><th>Gửi (ECU nhận)</th><th>Phản hồi</th><th>Ý nghĩa</th></tr></thead>
+          <tbody><tr><td data-out="reqHex"></td><td data-out="rspHex"></td><td data-out="meaning"></td></tr></tbody>
+        </table>
+        <div class="sim-stats">
+          <span>Dịch vụ trong bảng: <b data-out="n">–</b></span>
+          <span>Dòng của <code>diag_dispatch</code> bị sửa: <b>0</b></span>
+          <span>Bản dùng switch: <b data-out="swEdit">–</b></span>
+        </div>
+        <p class="dsp-status" data-out="msg"></p>
+      </section>
+      <p class="try"><b>Thử:</b> với biến thể Cơ bản, gửi <code>11 01</code>: bảng không có 0x11 nên ECU trả <code>7F 11 11</code>. Chọn biến thể Tiêu chuẩn (hoặc tick “0x11 Reset”) và gửi lại: cùng một <code>diag_dispatch</code>, giờ trả <code>51 01</code>. Rồi gửi <code>22 F1 FF</code>: dịch vụ 0x22 có trong bảng nhưng DID <code>F1 FF</code> thì không tồn tại, nên ECU trả <code>7F 22 31</code> (<code>requestOutOfRange</code>). Đó là lỗi của dữ liệu trong yêu cầu, do hàm xử lý quyết định; bộ điều phối không dính vào.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · hai yêu cầu đi qua bộ điều phối</p>
+        <ol>
+          <li><code>22 F1 90</code>. SID = <code>0x22</code>, có trong bảng, gọi <code>read_data_by_id</code>. DID <code>F1 90</code> là VIN: phản hồi gồm <code>62</code> (<code>0x22 + 0x40</code>), lặp lại hai byte DID, rồi 17 byte ký tự của VIN: <code>1 + 2 + 17 = 20</code> byte.</li>
+          <li><code>27 01</code> (xin seed bảo mật). SID = <code>0x27</code>, không có trong bảng của bất kỳ biến thể nào ở trên, nên bộ điều phối trả <code>7F 27 11</code>: 3 byte, gồm <code>0x7F</code>, SID bị từ chối, NRC <code>0x11</code>.</li>
+          <li>Bản dùng <code>switch (req[0])</code>: thêm dịch vụ thứ tư là thêm một <code>case</code> vào hàm đang chạy; thêm dịch vụ thứ năm là case thứ năm. Bản bảng: thêm một hàm xử lý mới và một dòng trong bảng, <code>diag_dispatch</code> giữ nguyên.</li>
+        </ol>
+        <p>Mô phỏng chỉ giữ phần cốt lõi của giao thức: không có phân đoạn ISO-TP, không theo dõi phiên chẩn đoán hay mở khoá bảo mật. Nó đủ để thấy cấu trúc “đóng với sửa đổi”, không thay cho đặc tả.</p>
+      </div>
+      <p>Hai lưu ý riêng của ngành. Một, quy trình an toàn chức năng và các bộ quy tắc lập trình (như MISRA C) khiến nhiều tổ chức siết việc dùng con trỏ hàm và cấp phát động. Bảng thao tác <code>const</code> cố định lúc build, như trên, dễ chấp nhận hơn con trỏ hàm gán lúc chạy, vì không có đích gọi nào ngoài những gì viết trong bảng. Hai, đường nối rõ ràng làm ranh giới test đơn vị rõ ràng, và mỗi cổng có hợp đồng viết thành lời là chỗ tự nhiên để gắn yêu cầu và truy vết test; việc đó vẫn phải làm theo quy trình của tổ chức bạn, SOLID chỉ làm nó dễ hơn.</p>
+
+      <h2 id="qua-tay">Khi nào đừng áp dụng</h2>
+      <p>SOLID là công cụ giảm chi phí của thay đổi, và nó có chi phí trả trước: thêm file, thêm tầng gián tiếp, thêm thứ phải đọc. Khi không có thay đổi nào để giảm chi phí, bạn chỉ trả tiền. Mỗi nguyên tắc đẩy quá tay đều để lại một dấu hiệu dễ nhận:</p>
+      <table>
+        <thead><tr><th>Nguyên tắc</th><th>Quá tay trông như thế nào</th></tr></thead>
+        <tbody>
+          <tr><td><b>S</b></td><td>mỗi hàm ba dòng nằm trong bốn mươi file; đọc một luồng phải nhảy mười chỗ</td></tr>
+          <tr><td><b>O</b></td><td>mọi thứ là plugin, kể cả thứ chưa bao giờ đổi</td></tr>
+          <tr><td><b>L</b></td><td>hợp đồng viết dài hơn code, không ai chạy test của nó</td></tr>
+          <tr><td><b>I</b></td><td>mỗi hàm một giao diện, mỗi giao diện một bản cài đặt</td></tr>
+          <tr><td><b>D</b></td><td>giao diện cho mọi struct, kể cả thứ chỉ có một bản cài đặt và không bao giờ cần giả</td></tr>
+        </tbody>
+      </table>
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · chi phí trả trước của module trong bài</p>
+        <ul>
+          <li>Hàm gộp ở phần S: <code>12</code> dòng, một file, làm đúng một việc cho đúng một board.</li>
+          <li>Riêng file cổng <code>thermal_ports.h</code> đã có <code>41</code> dòng code (nhiều hơn 3 lần cả hàm gộp), chưa kể controller, chính sách, sink. Toàn bộ lõi là <code>166</code> dòng trong <code>9</code> file, riêng board thêm <code>93</code> dòng.</li>
+          <li>Phần đó gồm cả ba chính sách, hai sink, <code>tee_log</code>, bản giả và harness test. Một module chỉ có đúng một cái mỗi loại sẽ nhỏ hơn nhiều, nhưng vẫn lớn hơn 12 dòng.</li>
+        </ul>
+        <p>Nếu bạn chắc chắn chỉ có một board, một chính sách, một đích log và không cần test tự động, hàm gộp 12 dòng rẻ hơn. Quy tắc lật ngược cán cân: có nhu cầu test tự động, hoặc đã có hai bản cài đặt, thì tạo cổng.</p>
+      </div>
+      <p>Ba quy tắc thực dụng để quyết định:</p>
+      <ol>
+        <li><b>Có hai bản cài đặt, hoặc cần giả để test:</b> tạo cổng. Một bản cài đặt và không cần giả: chưa tạo.</li>
+        <li><b>Đã đổi lần thứ hai ở cùng một chỗ:</b> cắt đường nối ở đó. Lần đầu có thể là ngẫu nhiên, lần hai là xu hướng.</li>
+        <li><b>Chưa có lý do:</b> giữ code đơn giản nhưng để sẵn khả năng tách sau. S gần như miễn phí ở điểm này: hàm nhỏ, file nhỏ, mỗi chỗ một lý do đổi thì tách sau chỉ là di chuyển code.</li>
+      </ol>
+
+      <h2>File code của bài</h2>
+      <p>Mọi file dưới đây chỉ dùng thư viện chuẩn. Bỏ chung vào một thư mục rồi chạy các lệnh sau (đã thử với GCC 6.3 và <code>-Werror</code>):</p>
+<pre><code class="language-text" data-filename="build.txt"># bản chạy trên PC: kịch bản 20 nhịp qua ba chính sách
+gcc -std=c99 -Wall -Wextra -pedantic -o host main_host.c thermal_ctl.c policies.c ram_log.c tee_log.c replay_source.c
+
+# bộ test hợp đồng và ba bản cài đặt sai (cần adc_source.c, không cần chip vì HAL là bản giả trong file test)
+gcc -std=c99 -Wall -Wextra -pedantic -o contract contract_test.c thermal_ctl.c policies.c adc_source.c
+
+# phía board: chỉ biên dịch, muốn link cần HAL thật của chip
+gcc -std=c99 -Wall -Wextra -pedantic -c adc_source.c pwm_fan.c uart_log.c tee_log.c main_board.c
+
+# canh hướng phụ thuộc
+python check_deps.py</code></pre>
+      <p>Chạy <code>./host</code> phải ra đúng các số của mô phỏng ở phần ghép module:</p>
+<pre><code class="language-text">threshold 95       changes=4  faults=0 fan=0,0,0,0,0,100,0,100,100,100,0,0,0,0,0,0,0,0,0,0
+hysteresis 95/85   changes=2  faults=0 fan=0,0,0,0,0,100,100,100,100,100,100,100,100,100,0,0,0,0,0,0
+ramp 80..100       changes=13 faults=0 fan=0,0,0,50,70,80,70,80,90,75,65,55,40,30,20,0,0,0,0,0
+hysteresis+fault   changes=2  faults=4 fan=0,0,0,0,0,100,100,100,100,100,100,100,100,100,0,0,0,0,0,0
+hysteresis+cold    changes=4  faults=3 fan=0,100,100,100,0,100,100,100,100,100,100,100,100,100,0,0,0,0,0,0
+tee a=20 b=20</code></pre>
+      <p>Chạy <code>./contract</code> cho bảng bốn bản cài đặt qua ba bài test, rồi vệt quạt của từng bản với cảm biến đứt dây ở nhịp 8–11:</p>
+<pre><code class="language-text">impl       measure  fault    nonblock
+adc        pass     pass     pass
+zero       pass     FAIL     pass
+deci       FAIL     pass     pass
+spin       pass     pass     FAIL
+
+adc        changes=2  fan=0,0,0,0,0,100,100,100,100,100,100,100,100,100,0,0,0,0,0,0
+zero       changes=2  fan=0,0,0,0,0,100,100,100,0,0,0,0,0,0,0,0,0,0,0,0
+deci       changes=2  fan=0,0,0,0,0,0,0,0,100,100,100,100,0,0,0,0,0,0,0,0
+spin       changes=2  fan=0,0,0,0,0,100,100,100,100,100,100,100,100,100,0,0,0,0,0,0</code></pre>
+      <p>Trình duyệt không chạy được C, nên các mô phỏng trong bài dùng bản JavaScript tương đương của cùng các hàm (khối <code>Core</code> ở cuối trang). Hai bản đã được đối chiếu: 5 lượt chạy kịch bản của <code>main_host.c</code>, 4 bản cài đặt × 3 bài test và 4 vệt quạt của <code>contract_test.c</code> đều khớp từng ký tự, và luật của mô phỏng phần firmware khớp <code>check_deps.py</code> trên cả 5 include sai.</p>
+
+      <ul class="code-links">
+        <li><a data-from="#c-ports" download="thermal_ports.h">thermal_ports.h <small>bốn cổng và hợp đồng</small></a></li>
+        <li><a data-from="#c-ctl-h" download="thermal_ctl.h">thermal_ctl.h <small>giao diện bộ điều khiển</small></a></li>
+        <li><a data-from="#c-ctl-c" download="thermal_ctl.c">thermal_ctl.c <small>bộ điều khiển, chỉ biết bốn cổng</small></a></li>
+        <li><a data-from="#c-pol-h" download="policies.h">policies.h <small>ba chính sách quạt</small></a></li>
+        <li><a data-from="#c-pol-c" download="policies.c">policies.c <small>threshold, hysteresis, ramp</small></a></li>
+        <li><a data-from="#c-ram-h" download="ram_log.h">ram_log.h <small>sink vòng đệm RAM</small></a></li>
+        <li><a data-from="#c-ram-c" download="ram_log.c">ram_log.c <small>cài đặt vòng đệm</small></a></li>
+        <li><a data-from="#c-tee-h" download="tee_log.h">tee_log.h <small>sink tổng hợp</small></a></li>
+        <li><a data-from="#c-tee-c" download="tee_log.c">tee_log.c <small>chuyển sự kiện cho mọi sink đã đăng ký</small></a></li>
+        <li><a data-from="#c-adc-h" download="adc_source.h">adc_source.h <small>nguồn nhiệt độ từ ADC</small></a></li>
+        <li><a data-from="#c-adc-c" download="adc_source.c">adc_source.c <small>đọc ADC không chặn, phát hiện chạm rail</small></a></li>
+        <li><a data-from="#c-pwm-h" download="pwm_fan.h">pwm_fan.h <small>quạt điều khiển bằng PWM</small></a></li>
+        <li><a data-from="#c-pwm-c" download="pwm_fan.c">pwm_fan.c <small>đổi phần trăm ra độ rộng xung</small></a></li>
+        <li><a data-from="#c-uart-h" download="uart_log.h">uart_log.h <small>sink UART</small></a></li>
+        <li><a data-from="#c-uart-c" download="uart_log.c">uart_log.c <small>in sự kiện ra UART dạng văn bản</small></a></li>
+        <li><a data-from="#c-replay-h" download="replay_source.h">replay_source.h <small>nguồn giả để test</small></a></li>
+        <li><a data-from="#c-replay-c" download="replay_source.c">replay_source.c <small>phát lại dãy mẫu soạn sẵn</small></a></li>
+        <li><a data-from="#c-hal-adc" download="hal_adc.h">hal_adc.h <small>khai báo HAL của ADC</small></a></li>
+        <li><a data-from="#c-hal-pwm" download="hal_pwm.h">hal_pwm.h <small>khai báo HAL của PWM</small></a></li>
+        <li><a data-from="#c-hal-uart" download="hal_uart.h">hal_uart.h <small>khai báo HAL của UART</small></a></li>
+        <li><a data-from="#c-main-board" download="main_board.c">main_board.c <small>điểm lắp ráp cho board thật</small></a></li>
+        <li><a data-from="#c-main-host" download="main_host.c">main_host.c <small>điểm lắp ráp và kịch bản cho PC</small></a></li>
+        <li><a data-from="#c-contract" download="contract_test.c">contract_test.c <small>bộ test hợp đồng và ba bản sai</small></a></li>
+        <li><a data-from="#c-check" download="check_deps.py">check_deps.py <small>canh hướng phụ thuộc</small></a></li>
+      </ul>
+    </article>
+  </main>
+
+  <!-- Code của bài. Các file C và Python bên dưới chỉ để hiển thị và tải về (type="text/plain"), đó là bản gốc.
+       Các mô phỏng chạy bản JavaScript tương đương (khối Core, logic thuần không đụng DOM), vì trình duyệt không chạy C.
+       Sửa module C thì sửa cả Core. Kiểm tra nhanh: biên dịch main_host.c và contract_test.c, đầu ra phải khớp
+       từng ký tự với các khối "Chạy ./host" và "Chạy ./contract" ở cuối bài. -->
+  <script type="text/plain" id="c-ports">
+/* Các cổng (port) của module nhiệt độ.
+ * File này thuộc về BÊN CẤP CAO (bộ điều khiển): nó nói "tôi cần gì",
+ * còn driver và bản giả lập phải khớp theo.
+ */
+#ifndef THERMAL_PORTS_H
+#define THERMAL_PORTS_H
+
+#include <stdint.h>
+
+/* ---- Cổng đọc nhiệt độ ----
+ * Hợp đồng của read(), mọi bản cài đặt đều phải giữ:
+ *   1. Không chặn: quay về ngay, không đợi phần cứng.
+ *   2. Trả TS_OK thì *milli_c là một phép đo mới, đơn vị milli-độ C,
+ *      nằm trong [TS_MIN_MC, TS_MAX_MC].
+ *   3. Trả mã khác TS_OK thì không ghi vào *milli_c.
+ */
+#define TS_MIN_MC (-40000)
+#define TS_MAX_MC 150000
+
+typedef enum { TS_OK = 0, TS_NOT_READY = 1, TS_FAULT = 2 } ts_status_t;
+
+typedef struct {
+    ts_status_t (*read)(void *ctx, int32_t *milli_c);
+} temp_source_ops_t;
+
+typedef struct {
+    const temp_source_ops_t *ops;
+    void *ctx;
+} temp_source_t;
+
+/* ---- Cổng quạt: percent trong [0, 100] ---- */
+typedef struct {
+    void (*set_percent)(void *ctx, uint8_t percent);
+} fan_ops_t;
+
+typedef struct {
+    const fan_ops_t *ops;
+    void *ctx;
+} fan_t;
+
+/* ---- Cổng chính sách: từ nhiệt độ ra % quạt. Được phép nhớ trạng thái trong ctx ---- */
+typedef struct {
+    uint8_t (*decide)(void *ctx, int32_t milli_c);
+} policy_ops_t;
+
+typedef struct {
+    const policy_ops_t *ops;
+    void *ctx;
+} policy_t;
+
+/* ---- Cổng ghi log. fault = 0 nếu đọc được, ngược lại là ts_status_t ---- */
+typedef struct {
+    uint32_t tick;
+    int32_t milli_c;
+    uint8_t percent;
+    uint8_t fault;
+} log_event_t;
+
+typedef struct {
+    void (*emit)(void *ctx, const log_event_t *ev);
+} log_sink_ops_t;
+
+typedef struct {
+    const log_sink_ops_t *ops;
+    void *ctx;
+} log_sink_t;
+
+#endif
+  </script>
+  <script type="text/plain" id="c-ctl-h">
+#ifndef THERMAL_CTL_H
+#define THERMAL_CTL_H
+
+#include "thermal_ports.h"
+
+#define THERMAL_FAILSAFE_PERCENT 100   /* mất cảm biến: quạt chạy hết cỡ */
+
+/* Bộ điều khiển chỉ biết bốn cổng, không biết ai ở phía sau. */
+typedef struct {
+    temp_source_t src;
+    policy_t      policy;
+    fan_t         fan;
+    log_sink_t    log;
+} thermal_ctl_t;
+
+/* Một nhịp điều khiển: đọc, quyết định, ra lệnh, ghi log. */
+void thermal_ctl_step(thermal_ctl_t *c, uint32_t tick);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-ctl-c">
+#include "thermal_ctl.h"
+
+void thermal_ctl_step(thermal_ctl_t *c, uint32_t tick)
+{
+    log_event_t ev = { 0, 0, 0, 0 };
+    int32_t milli_c = 0;
+    ts_status_t st = c->src.ops->read(c->src.ctx, &milli_c);
+
+    ev.tick = tick;
+    if (st == TS_OK) {
+        ev.milli_c = milli_c;
+        ev.percent = c->policy.ops->decide(c->policy.ctx, milli_c);
+    } else {
+        ev.percent = THERMAL_FAILSAFE_PERCENT;
+        ev.fault = (uint8_t)st;
+    }
+    c->fan.ops->set_percent(c->fan.ctx, ev.percent);
+    c->log.ops->emit(c->log.ctx, &ev);
+}
+  </script>
+  <script type="text/plain" id="c-pol-h">
+#ifndef POLICIES_H
+#define POLICIES_H
+
+#include "thermal_ports.h"
+
+/* Bật hết cỡ khi nhiệt độ >= on_mc, tắt khi thấp hơn. */
+typedef struct { int32_t on_mc; } threshold_policy_t;
+
+/* Bật khi >= hi_mc, tắt khi <= lo_mc, ở giữa thì giữ trạng thái cũ. */
+typedef struct { int32_t hi_mc; int32_t lo_mc; uint8_t on; } hysteresis_policy_t;
+
+/* 0% tại from_mc, 100% tại to_mc, tuyến tính ở giữa. */
+typedef struct { int32_t from_mc; int32_t to_mc; } ramp_policy_t;
+
+policy_t threshold_policy(threshold_policy_t *p);
+policy_t hysteresis_policy(hysteresis_policy_t *p);
+policy_t ramp_policy(ramp_policy_t *p);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-pol-c">
+#include "policies.h"
+
+static uint8_t threshold_decide(void *ctx, int32_t milli_c)
+{
+    const threshold_policy_t *p = ctx;
+    return milli_c >= p->on_mc ? 100 : 0;
+}
+
+static uint8_t hysteresis_decide(void *ctx, int32_t milli_c)
+{
+    hysteresis_policy_t *p = ctx;
+    if (milli_c >= p->hi_mc)      p->on = 1;
+    else if (milli_c <= p->lo_mc) p->on = 0;
+    return p->on ? 100 : 0;
+}
+
+static uint8_t ramp_decide(void *ctx, int32_t milli_c)
+{
+    const ramp_policy_t *p = ctx;
+    if (milli_c <= p->from_mc) return 0;
+    if (milli_c >= p->to_mc)   return 100;
+    return (uint8_t)((int64_t)(milli_c - p->from_mc) * 100 / (p->to_mc - p->from_mc));
+}
+
+/* Bảng thao tác nằm trong flash (const), không tốn RAM. */
+static const policy_ops_t THRESHOLD_OPS  = { threshold_decide };
+static const policy_ops_t HYSTERESIS_OPS = { hysteresis_decide };
+static const policy_ops_t RAMP_OPS       = { ramp_decide };
+
+policy_t threshold_policy(threshold_policy_t *p)   { policy_t r = { &THRESHOLD_OPS, p };  return r; }
+policy_t hysteresis_policy(hysteresis_policy_t *p) { policy_t r = { &HYSTERESIS_OPS, p }; return r; }
+policy_t ramp_policy(ramp_policy_t *p)             { policy_t r = { &RAMP_OPS, p };       return r; }
+  </script>
+  <script type="text/plain" id="c-ram-h">
+#ifndef RAM_LOG_H
+#define RAM_LOG_H
+
+#include "thermal_ports.h"
+
+/* Vòng đệm log trong RAM: đầy thì ghi đè bản ghi cũ nhất. */
+typedef struct {
+    log_event_t *buf;
+    uint16_t cap;
+    uint16_t head;    /* chỗ ghi tiếp theo */
+    uint16_t count;   /* số bản ghi đang giữ, tối đa cap */
+} ram_log_t;
+
+log_sink_t ram_log_sink(ram_log_t *r);
+const log_event_t *ram_log_at(const ram_log_t *r, uint16_t i);   /* i = 0 là bản ghi cũ nhất */
+
+#endif
+  </script>
+  <script type="text/plain" id="c-ram-c">
+#include "ram_log.h"
+
+static void ram_log_emit(void *ctx, const log_event_t *ev)
+{
+    ram_log_t *r = ctx;
+    r->buf[r->head] = *ev;
+    r->head = (uint16_t)((r->head + 1) % r->cap);
+    if (r->count < r->cap) r->count++;
+}
+
+static const log_sink_ops_t RAM_LOG_OPS = { ram_log_emit };
+
+log_sink_t ram_log_sink(ram_log_t *r)
+{
+    log_sink_t s = { &RAM_LOG_OPS, r };
+    return s;
+}
+
+const log_event_t *ram_log_at(const ram_log_t *r, uint16_t i)
+{
+    return &r->buf[(r->head + r->cap - r->count + i) % r->cap];
+}
+  </script>
+  <script type="text/plain" id="c-tee-h">
+#ifndef TEE_LOG_H
+#define TEE_LOG_H
+
+#include "thermal_ports.h"
+
+#define TEE_LOG_MAX 4
+
+/* Sink tổng hợp: nhận một sự kiện rồi chuyển cho mọi sink đã đăng ký.
+ * Bản thân nó cũng là một log_sink_t, nên bộ điều khiển không biết có bao nhiêu đích. */
+typedef struct {
+    log_sink_t out[TEE_LOG_MAX];
+    uint8_t n;
+} tee_log_t;
+
+int tee_log_add(tee_log_t *t, log_sink_t s);   /* trả 0 nếu đã đầy */
+log_sink_t tee_log_sink(tee_log_t *t);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-tee-c">
+#include "tee_log.h"
+
+static void tee_log_emit(void *ctx, const log_event_t *ev)
+{
+    tee_log_t *t = ctx;
+    uint8_t i;
+    for (i = 0; i < t->n; i++) t->out[i].ops->emit(t->out[i].ctx, ev);
+}
+
+static const log_sink_ops_t TEE_LOG_OPS = { tee_log_emit };
+
+int tee_log_add(tee_log_t *t, log_sink_t s)
+{
+    if (t->n >= TEE_LOG_MAX) return 0;
+    t->out[t->n++] = s;
+    return 1;
+}
+
+log_sink_t tee_log_sink(tee_log_t *t)
+{
+    log_sink_t s = { &TEE_LOG_OPS, t };
+    return s;
+}
+  </script>
+  <script type="text/plain" id="c-adc-h">
+#ifndef ADC_SOURCE_H
+#define ADC_SOURCE_H
+
+#include "thermal_ports.h"
+
+typedef struct { uint8_t channel; } adc_source_t;
+
+temp_source_t adc_source(adc_source_t *a);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-adc-c">
+#include "adc_source.h"
+#include "hal_adc.h"
+
+#define ADC_FULL_SCALE 4095   /* ADC 12 bit */
+
+static ts_status_t adc_read(void *ctx, int32_t *milli_c)
+{
+    const adc_source_t *a = ctx;
+    uint16_t raw;
+
+    if (hal_adc_try_read(a->channel, &raw) != HAL_OK) return TS_NOT_READY;
+    if (raw == 0 || raw == ADC_FULL_SCALE) return TS_FAULT;   /* chạm rail: đứt hoặc chập dây */
+
+    /* Quy đổi tuyến tính 0..4095 -> [TS_MIN_MC, TS_MAX_MC]; số liệu của ví dụ, không phải đặc tính cảm biến thật. */
+    *milli_c = TS_MIN_MC + (int32_t)raw * (TS_MAX_MC - TS_MIN_MC) / ADC_FULL_SCALE;
+    return TS_OK;
+}
+
+static const temp_source_ops_t ADC_OPS = { adc_read };
+
+temp_source_t adc_source(adc_source_t *a)
+{
+    temp_source_t s = { &ADC_OPS, a };
+    return s;
+}
+  </script>
+  <script type="text/plain" id="c-pwm-h">
+#ifndef PWM_FAN_H
+#define PWM_FAN_H
+
+#include "thermal_ports.h"
+
+typedef struct { uint8_t channel; } pwm_fan_t;
+
+fan_t pwm_fan(pwm_fan_t *f);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-pwm-c">
+#include "pwm_fan.h"
+#include "hal_pwm.h"
+
+static void pwm_fan_set(void *ctx, uint8_t percent)
+{
+    const pwm_fan_t *f = ctx;
+    hal_pwm_set_duty(f->channel, (uint16_t)(percent * 10u));
+}
+
+static const fan_ops_t PWM_FAN_OPS = { pwm_fan_set };
+
+fan_t pwm_fan(pwm_fan_t *f)
+{
+    fan_t r = { &PWM_FAN_OPS, f };
+    return r;
+}
+  </script>
+  <script type="text/plain" id="c-uart-h">
+#ifndef UART_LOG_H
+#define UART_LOG_H
+
+#include "thermal_ports.h"
+
+log_sink_t uart_log_sink(void);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-uart-c">
+#include "uart_log.h"
+#include "hal_uart.h"
+#include <stdio.h>
+
+static void uart_log_emit(void *ctx, const log_event_t *ev)
+{
+    char line[48];
+    int n;
+
+    (void)ctx;
+    /* Ví dụ: trên MCU nhỏ nên tự viết hàm in số thay cho snprintf. */
+    n = snprintf(line, sizeof line, "t=%lu T=%ld F=%u E=%u\r\n",
+                 (unsigned long)ev->tick, (long)ev->milli_c, (unsigned)ev->percent, (unsigned)ev->fault);
+    if (n > 0) hal_uart_write((const uint8_t *)line, (size_t)n);
+}
+
+static const log_sink_ops_t UART_LOG_OPS = { uart_log_emit };
+
+log_sink_t uart_log_sink(void)
+{
+    log_sink_t s = { &UART_LOG_OPS, 0 };
+    return s;
+}
+  </script>
+  <script type="text/plain" id="c-replay-h">
+#ifndef REPLAY_SOURCE_H
+#define REPLAY_SOURCE_H
+
+#include "thermal_ports.h"
+
+/* Nguồn nhiệt độ giả: phát lại một dãy mẫu đã soạn sẵn, dùng để test trên PC. */
+typedef struct {
+    ts_status_t st;
+    int32_t milli_c;
+} replay_sample_t;
+
+typedef struct {
+    const replay_sample_t *samples;
+    uint16_t n;
+    uint16_t i;
+} replay_source_t;
+
+temp_source_t replay_source(replay_source_t *r);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-replay-c">
+#include "replay_source.h"
+
+static ts_status_t replay_read(void *ctx, int32_t *milli_c)
+{
+    replay_source_t *r = ctx;
+    const replay_sample_t *s;
+
+    if (r->i >= r->n) return TS_NOT_READY;   /* hết kịch bản */
+    s = &r->samples[r->i++];
+    if (s->st == TS_OK) *milli_c = s->milli_c;
+    return s->st;
+}
+
+static const temp_source_ops_t REPLAY_OPS = { replay_read };
+
+temp_source_t replay_source(replay_source_t *r)
+{
+    temp_source_t s = { &REPLAY_OPS, r };
+    return s;
+}
+  </script>
+  <script type="text/plain" id="c-hal-adc">
+#ifndef HAL_ADC_H
+#define HAL_ADC_H
+
+#include <stdint.h>
+
+typedef enum { HAL_OK = 0, HAL_BUSY = 1 } hal_status_t;
+
+/* Lấy kết quả chuyển đổi 12 bit (0..4095) nếu đã xong; chưa xong thì trả HAL_BUSY. Không chặn. */
+hal_status_t hal_adc_try_read(uint8_t channel, uint16_t *raw);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-hal-pwm">
+#ifndef HAL_PWM_H
+#define HAL_PWM_H
+
+#include <stdint.h>
+
+/* Đặt độ rộng xung của một kênh, đơn vị phần nghìn (0..1000). */
+void hal_pwm_set_duty(uint8_t channel, uint16_t permille);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-hal-uart">
+#ifndef HAL_UART_H
+#define HAL_UART_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+/* Đẩy len byte vào hàng đợi truyền của UART. */
+void hal_uart_write(const uint8_t *data, size_t len);
+
+#endif
+  </script>
+  <script type="text/plain" id="c-main-board">
+/* Điểm lắp ráp (composition root) cho board thật: nơi DUY NHẤT biết driver nào được dùng. */
+#include "adc_source.h"
+#include "policies.h"
+#include "pwm_fan.h"
+#include "ram_log.h"
+#include "tee_log.h"
+#include "thermal_ctl.h"
+#include "uart_log.h"
+
+static adc_source_t        adc  = { 3 };            /* kênh ADC của cảm biến */
+static pwm_fan_t           fan  = { 1 };            /* kênh PWM của quạt */
+static hysteresis_policy_t hyst = { 95000, 85000, 0 };
+static log_event_t         history[64];
+static ram_log_t           ram  = { history, 64, 0, 0 };
+static tee_log_t           tee;
+static thermal_ctl_t       ctl;
+
+void thermal_init(void)
+{
+    tee_log_add(&tee, uart_log_sink());              /* thêm đích log = thêm một dòng ở đây */
+    tee_log_add(&tee, ram_log_sink(&ram));
+
+    ctl.src    = adc_source(&adc);
+    ctl.policy = hysteresis_policy(&hyst);
+    ctl.fan    = pwm_fan(&fan);
+    ctl.log    = tee_log_sink(&tee);
+}
+
+void thermal_tick(uint32_t tick)   /* gọi đều đặn từ vòng lặp chính hoặc timer */
+{
+    thermal_ctl_step(&ctl, tick);
+}
+  </script>
+  <script type="text/plain" id="c-main-host">
+/* Điểm lắp ráp cho PC: nguồn giả phát lại kịch bản, quạt giả ghi lệnh, log vào RAM. */
+#include <stdio.h>
+#include "policies.h"
+#include "ram_log.h"
+#include "replay_source.h"
+#include "tee_log.h"
+#include "thermal_ctl.h"
+
+#define STEPS 20
+
+/* Nhiệt độ theo từng nhịp, milli-độ C: leo qua 95 độ, dao động quanh đó, rồi nguội dần. */
+static const int32_t SCENARIO[STEPS] = {
+    60000, 70000, 80000, 90000, 94000, 96000, 94000, 96000, 98000, 95000,
+    93000, 91000, 88000, 86000, 84000, 80000, 74000, 70000, 65000, 60000
+};
+
+/* Quạt giả: chỉ ghi lại các lệnh nhận được. */
+typedef struct { uint8_t percent[STEPS]; uint16_t n; } fake_fan_t;
+
+static void fake_fan_set(void *ctx, uint8_t percent)
+{
+    fake_fan_t *f = ctx;
+    f->percent[f->n++] = percent;
+}
+
+static const fan_ops_t FAKE_FAN_OPS = { fake_fan_set };
+
+/* Chạy kịch bản qua bộ điều khiển. Các nhịp fault_from..fault_to cảm biến báo TS_FAULT (-1: không lỗi). */
+static void run(const char *name, policy_t policy, int fault_from, int fault_to)
+{
+    replay_sample_t samples[STEPS];
+    replay_source_t replay = { samples, STEPS, 0 };
+    fake_fan_t fan = { { 0 }, 0 };
+    log_event_t storage[STEPS];
+    ram_log_t log = { storage, STEPS, 0, 0 };
+    thermal_ctl_t ctl;
+    unsigned changes = 0, faults = 0;
+    int i;
+
+    for (i = 0; i < STEPS; i++) {
+        samples[i].st = (i >= fault_from && i <= fault_to) ? TS_FAULT : TS_OK;
+        samples[i].milli_c = SCENARIO[i];
+    }
+    ctl.src = replay_source(&replay);
+    ctl.policy = policy;
+    ctl.fan.ops = &FAKE_FAN_OPS;
+    ctl.fan.ctx = &fan;
+    ctl.log = ram_log_sink(&log);
+
+    for (i = 0; i < STEPS; i++) thermal_ctl_step(&ctl, (uint32_t)i);
+
+    for (i = 1; i < STEPS; i++) if (fan.percent[i] != fan.percent[i - 1]) changes++;
+    for (i = 0; i < log.count; i++) if (ram_log_at(&log, (uint16_t)i)->fault) faults++;
+
+    printf("%-18s changes=%-2u faults=%u fan=", name, changes, faults);
+    for (i = 0; i < STEPS; i++) printf("%u%c", fan.percent[i], i + 1 < STEPS ? ',' : '\n');
+}
+
+/* tee_log chuyển mỗi sự kiện cho mọi sink: hai vòng đệm phải nhận đủ như nhau. */
+static void tee_demo(void)
+{
+    log_event_t sa[STEPS], sb[STEPS];
+    ram_log_t a = { sa, STEPS, 0, 0 }, b = { sb, STEPS, 0, 0 };
+    tee_log_t tee = { { { 0, 0 } }, 0 };
+    log_sink_t sink;
+    log_event_t ev = { 0, 0, 0, 0 };
+    int i;
+
+    tee_log_add(&tee, ram_log_sink(&a));
+    tee_log_add(&tee, ram_log_sink(&b));
+    sink = tee_log_sink(&tee);
+    for (i = 0; i < STEPS; i++) { ev.tick = (uint32_t)i; sink.ops->emit(sink.ctx, &ev); }
+    printf("tee a=%u b=%u\n", a.count, b.count);
+}
+
+int main(void)
+{
+    threshold_policy_t  th  = { 95000 };
+    hysteresis_policy_t hy  = { 95000, 85000, 0 };
+    hysteresis_policy_t hy2 = { 95000, 85000, 0 };
+    hysteresis_policy_t hy3 = { 95000, 85000, 0 };
+    ramp_policy_t       rp  = { 80000, 100000 };
+
+    run("threshold 95",     threshold_policy(&th), -1, -1);
+    run("hysteresis 95/85", hysteresis_policy(&hy), -1, -1);
+    run("ramp 80..100",     ramp_policy(&rp), -1, -1);
+    run("hysteresis+fault", hysteresis_policy(&hy2), 8, 11);
+    run("hysteresis+cold",  hysteresis_policy(&hy3), 1, 3);
+    tee_demo();
+    return 0;
+}
+  </script>
+  <script type="text/plain" id="c-contract">
+/* Bộ test hợp đồng cho cổng temp_source: chạy CÙNG một bộ test trên mọi bản cài đặt.
+ * HAL ở đây là bản giả có đồng hồ mô phỏng: mỗi lần thăm dò tốn 10 us, và chuyển đổi
+ * xong sau g_ready_at_us. Bản nào qua được bộ test mới được phép thế chỗ adc_source. */
+#include <stdio.h>
+#include "adc_source.h"
+#include "hal_adc.h"
+#include "policies.h"
+#include "thermal_ctl.h"
+
+/* ---------- HAL giả ---------- */
+static uint16_t g_raw;
+static uint32_t g_clock_us;
+static uint32_t g_ready_at_us;
+
+hal_status_t hal_adc_try_read(uint8_t channel, uint16_t *raw)
+{
+    (void)channel;
+    g_clock_us += 10;
+    if (g_clock_us < g_ready_at_us) return HAL_BUSY;
+    *raw = g_raw;
+    return HAL_OK;
+}
+
+static int32_t scale(uint16_t raw)
+{
+    return TS_MIN_MC + (int32_t)raw * (TS_MAX_MC - TS_MIN_MC) / 4095;
+}
+
+/* ---------- Ba bản cài đặt SAI hợp đồng (adc_source là bản đúng) ---------- */
+
+/* Vi phạm điều 2: lỗi phần cứng bị che bằng "TS_OK, 0". */
+static ts_status_t zero_read(void *ctx, int32_t *milli_c)
+{
+    uint16_t raw;
+    (void)ctx;
+    if (hal_adc_try_read(0, &raw) != HAL_OK || raw == 0 || raw == 4095) { *milli_c = 0; return TS_OK; }
+    *milli_c = scale(raw);
+    return TS_OK;
+}
+
+/* Vi phạm điều 2: trả đơn vị khác (phần mười độ C thay vì milli-độ C). */
+static ts_status_t deci_read(void *ctx, int32_t *milli_c)
+{
+    uint16_t raw;
+    (void)ctx;
+    if (hal_adc_try_read(0, &raw) != HAL_OK) return TS_NOT_READY;
+    if (raw == 0 || raw == 4095) return TS_FAULT;
+    *milli_c = scale(raw) / 100;
+    return TS_OK;
+}
+
+/* Vi phạm điều 1: quay vòng chờ chuyển đổi xong. */
+static ts_status_t spin_read(void *ctx, int32_t *milli_c)
+{
+    uint16_t raw;
+    (void)ctx;
+    while (hal_adc_try_read(0, &raw) != HAL_OK) { }
+    if (raw == 0 || raw == 4095) return TS_FAULT;
+    *milli_c = scale(raw);
+    return TS_OK;
+}
+
+static const temp_source_ops_t ZERO_OPS = { zero_read };
+static const temp_source_ops_t DECI_OPS = { deci_read };
+static const temp_source_ops_t SPIN_OPS = { spin_read };
+
+/* ---------- Bộ test hợp đồng ---------- */
+static int t_measure(temp_source_t s)    /* điều 2: đo đúng, đúng đơn vị */
+{
+    int32_t mc = 0;
+    g_raw = 2048; g_ready_at_us = 0;
+    return s.ops->read(s.ctx, &mc) == TS_OK && mc >= 55022 && mc <= 55024;
+}
+
+static int t_fault(temp_source_t s)      /* điều 2: lỗi phần cứng không được báo là TS_OK */
+{
+    int32_t mc = 0;
+    g_raw = 0; g_ready_at_us = 0;
+    return s.ops->read(s.ctx, &mc) == TS_FAULT;
+}
+
+static int t_nonblock(temp_source_t s)   /* điều 1: chuyển đổi cần 48 ms, nhưng read() phải xong trong <= 1 ms */
+{
+    int32_t mc = 0;
+    uint32_t t0 = g_clock_us;
+    g_raw = 2048; g_ready_at_us = g_clock_us + 48000;
+    s.ops->read(s.ctx, &mc);
+    return g_clock_us - t0 <= 1000;
+}
+
+/* ---------- Kịch bản điều khiển qua từng bản cài đặt ---------- */
+#define STEPS 20
+static const int32_t SCENARIO[STEPS] = {
+    60000, 70000, 80000, 90000, 94000, 96000, 94000, 96000, 98000, 95000,
+    93000, 91000, 88000, 86000, 84000, 80000, 74000, 70000, 65000, 60000
+};
+
+typedef struct { uint8_t percent[STEPS]; uint16_t n; } fake_fan_t;
+static void fake_fan_set(void *ctx, uint8_t p) { fake_fan_t *f = ctx; f->percent[f->n++] = p; }
+static const fan_ops_t FAKE_FAN_OPS = { fake_fan_set };
+static void null_emit(void *ctx, const log_event_t *ev) { (void)ctx; (void)ev; }
+static const log_sink_ops_t NULL_SINK_OPS = { null_emit };
+
+/* Cảm biến đứt dây (raw = 0) ở nhịp 8..11, đúng lúc nhiệt độ đang 91..98 độ. */
+static void drive(const char *name, temp_source_t src)
+{
+    hysteresis_policy_t hy = { 95000, 85000, 0 };
+    fake_fan_t fan = { { 0 }, 0 };
+    thermal_ctl_t ctl;
+    unsigned changes = 0;
+    int i;
+
+    ctl.src = src;
+    ctl.policy = hysteresis_policy(&hy);
+    ctl.fan.ops = &FAKE_FAN_OPS; ctl.fan.ctx = &fan;
+    ctl.log.ops = &NULL_SINK_OPS; ctl.log.ctx = 0;
+
+    for (i = 0; i < STEPS; i++) {
+        g_ready_at_us = 0;
+        g_raw = (i >= 8 && i <= 11) ? 0 : (uint16_t)(((int64_t)(SCENARIO[i] - TS_MIN_MC) * 4095 + 95000) / 190000);
+        thermal_ctl_step(&ctl, (uint32_t)i);
+    }
+    for (i = 1; i < STEPS; i++) if (fan.percent[i] != fan.percent[i - 1]) changes++;
+    printf("%-10s changes=%-2u fan=", name, changes);
+    for (i = 0; i < STEPS; i++) printf("%u%c", fan.percent[i], i + 1 < STEPS ? ',' : '\n');
+}
+
+int main(void)
+{
+    adc_source_t adc = { 0 };
+    struct { const char *name; temp_source_t src; } impls[4];
+    int i;
+
+    impls[0].name = "adc";  impls[0].src = adc_source(&adc);
+    impls[1].name = "zero"; impls[1].src.ops = &ZERO_OPS; impls[1].src.ctx = 0;
+    impls[2].name = "deci"; impls[2].src.ops = &DECI_OPS; impls[2].src.ctx = 0;
+    impls[3].name = "spin"; impls[3].src.ops = &SPIN_OPS; impls[3].src.ctx = 0;
+
+    printf("%-10s %-8s %-8s %-8s\n", "impl", "measure", "fault", "nonblock");
+    for (i = 0; i < 4; i++)
+        printf("%-10s %-8s %-8s %-8s\n", impls[i].name,
+               t_measure(impls[i].src) ? "pass" : "FAIL",
+               t_fault(impls[i].src) ? "pass" : "FAIL",
+               t_nonblock(impls[i].src) ? "pass" : "FAIL");
+    printf("\n");
+    for (i = 0; i < 4; i++) drive(impls[i].name, impls[i].src);
+    return 0;
+}
+  </script>
+  <script type="text/plain" id="c-check">
+#!/usr/bin/env python3
+"""Kiểm tra hướng phụ thuộc của module nhiệt độ: mỗi file chỉ được #include những tầng cho phép.
+
+Cách chạy:  python check_deps.py [thư_mục]      (mặc định: thư mục hiện tại)
+Thoát với mã 1 nếu có vi phạm, nên gắn thẳng vào CI.
+"""
+import re
+import sys
+from pathlib import Path
+
+# (tầng, mẫu tên file, các tầng được include). "own" là header cùng tên với chính file đó.
+LAYERS = [
+    ("hal",     r"hal_\w+\.h",                              []),
+    ("port",    r"thermal_ports\.h",                        []),
+    ("service", r"(thermal_ctl|policies|ram_log|tee_log)\.[ch]",    ["port", "own"]),
+    ("driver",  r"(adc_source|pwm_fan|uart_log|replay_source)\.[ch]", ["port", "hal", "own"]),
+    ("main",    r"main_\w+\.c",                             ["port", "service", "driver", "hal"]),
+]
+INCLUDE = re.compile(r'^\s*#\s*include\s+"([^"]+)"', re.M)
+
+
+def layer_of(name):
+    for layer, pattern, allowed in LAYERS:
+        if re.fullmatch(pattern, name):
+            return layer, allowed
+    return None, None
+
+
+def check(folder):
+    bad = []
+    for path in sorted(Path(folder).glob("*.[ch]")):
+        layer, allowed = layer_of(path.name)
+        if layer is None:
+            continue                                  # file không thuộc tầng nào (vd contract_test.c)
+        for inc in INCLUDE.findall(path.read_text(encoding="utf-8")):
+            target, _ = layer_of(inc)
+            own = Path(inc).stem == path.stem
+            if own or target in allowed:
+                continue
+            bad.append(f"{path.name} ({layer}) không được include {inc} ({target or 'không rõ tầng'})")
+    return bad
+
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")   # console Windows mặc định không in được tiếng Việt
+    problems = check(sys.argv[1] if len(sys.argv) > 1 else ".")
+    print("\n".join(problems) if problems else "OK: không có include sai hướng")
+    sys.exit(1 if problems else 0)
+  </script>
+
+  <script id="core-js">
+/* Phần lõi của các mô phỏng, KHÔNG đụng tới DOM: bản JavaScript của module C trong bài và logic tính toán
+ * của từng mô phỏng. Tách riêng để chạy được bằng Node và đối chiếu từng con số với chương trình C
+ * (main_host.c, contract_test.c). Sửa module C thì sửa cả ở đây. */
+globalThis.Core = (function () {
+  // ===== 1. Module nhiệt độ: bản port của thermal_ctl.c, policies.c, adc_source.c =====
+  const TS_MIN = -40000, TS_MAX = 150000, FULL = 4095;
+  const OK = 0, NOT_READY = 1, FAULT = 2;
+  const STEPS = 20;
+  const SCENARIO = [60000, 70000, 80000, 90000, 94000, 96000, 94000, 96000, 98000, 95000,
+                    93000, 91000, 88000, 86000, 84000, 80000, 74000, 70000, 65000, 60000];
+
+  const scale = (raw) => TS_MIN + Math.trunc(raw * (TS_MAX - TS_MIN) / FULL);        // adc_source.c
+  const rawOf = (mc) => Math.trunc(((mc - TS_MIN) * FULL + 95000) / 190000);         // contract_test.c
+
+  const POLICIES = {                                  // policies.c; mỗi lần gọi trả về một bộ quyết định có trạng thái riêng
+    threshold: () => (mc) => (mc >= 95000 ? 100 : 0),
+    hysteresis: () => {
+      let on = 0;
+      return (mc) => { if (mc >= 95000) on = 1; else if (mc <= 85000) on = 0; return on ? 100 : 0; };
+    },
+    ramp: () => (mc) => (mc <= 80000 ? 0 : mc >= 100000 ? 100 : Math.trunc((mc - 80000) * 100 / 20000)),
+  };
+
+  // thermal_ctl_step: đọc, quyết định, trả về sự kiện (quạt và log do bên gọi xử lý)
+  function step(read, decide, tick) {
+    const r = read();
+    if (r.st === OK) return { tick, mc: r.mc, percent: decide(r.mc), fault: 0 };
+    return { tick, mc: 0, percent: 100, fault: r.st };                              // THERMAL_FAILSAFE_PERCENT
+  }
+
+  // replay_source.c: nhịp i báo FAULT nếu nằm trong [from, to]
+  function replay(from, to) {
+    let i = 0;
+    return () => {
+      const k = i++;
+      if (k >= STEPS) return { st: NOT_READY };
+      return k >= from && k <= to ? { st: FAULT } : { st: OK, mc: SCENARIO[k] };
+    };
+  }
+
+  const changes = (fan) => fan.reduce((n, p, i) => n + (i && p !== fan[i - 1] ? 1 : 0), 0);
+
+  // main_host.c::run
+  function runHost(policy, from = -1, to = -1) {
+    const read = replay(from, to), decide = POLICIES[policy]();
+    const events = [], fan = [];
+    for (let i = 0; i < STEPS; i++) { const ev = step(read, decide, i); events.push(ev); fan.push(ev.percent); }
+    return { events, fan, changes: changes(fan), faults: events.filter((e) => e.fault).length };
+  }
+
+  // contract_test.c: HAL giả có đồng hồ mô phỏng; mỗi lần thăm dò tốn 10 us
+  function makeHal() {
+    return {
+      raw: 0, clock: 0, readyAt: 0,
+      tryRead() { this.clock += 10; return this.clock < this.readyAt ? null : this.raw; },
+    };
+  }
+  const IMPLS = {                                     // adc_source (đúng) và ba bản sai hợp đồng
+    adc: (hal) => () => {
+      const raw = hal.tryRead();
+      if (raw === null) return { st: NOT_READY };
+      if (raw === 0 || raw === FULL) return { st: FAULT };
+      return { st: OK, mc: scale(raw) };
+    },
+    zero: (hal) => () => {
+      const raw = hal.tryRead();
+      if (raw === null || raw === 0 || raw === FULL) return { st: OK, mc: 0 };
+      return { st: OK, mc: scale(raw) };
+    },
+    deci: (hal) => () => {
+      const raw = hal.tryRead();
+      if (raw === null) return { st: NOT_READY };
+      if (raw === 0 || raw === FULL) return { st: FAULT };
+      return { st: OK, mc: Math.trunc(scale(raw) / 100) };
+    },
+    spin: (hal) => () => {
+      let raw;
+      while ((raw = hal.tryRead()) === null) { /* quay vòng chờ */ }
+      if (raw === 0 || raw === FULL) return { st: FAULT };
+      return { st: OK, mc: scale(raw) };
+    },
+  };
+
+  function contractTests(name) {
+    const hal = makeHal(), read = IMPLS[name](hal);
+    hal.raw = 2048; hal.readyAt = 0;
+    const r1 = read();
+    const measure = r1.st === OK && r1.mc >= 55022 && r1.mc <= 55024;
+    hal.raw = 0; hal.readyAt = 0;
+    const fault = read().st === FAULT;
+    hal.raw = 2048; hal.readyAt = hal.clock + 48000;
+    const t0 = hal.clock;
+    read();
+    const elapsed = hal.clock - t0;
+    return { measure, fault, nonblock: elapsed <= 1000, elapsed };
+  }
+
+  // contract_test.c::drive: cảm biến đứt dây (raw = 0) ở nhịp 8..11
+  function driveAdc(name) {
+    const hal = makeHal(), read = IMPLS[name](hal), decide = POLICIES.hysteresis();
+    const events = [], fan = [], seen = [];
+    for (let i = 0; i < STEPS; i++) {
+      hal.readyAt = 0;
+      hal.raw = i >= 8 && i <= 11 ? 0 : rawOf(SCENARIO[i]);
+      const ev = step(read, decide, i);
+      events.push(ev); fan.push(ev.percent); seen.push(ev.fault ? null : ev.mc);
+    }
+    return { events, fan, seen, changes: changes(fan) };
+  }
+
+  // ===== 2. Đồ thị phụ thuộc cho mô phỏng "một yêu cầu đổi" =====
+  // Cạnh [a, b, loại]: a phụ thuộc b. Cạnh 'wire' (main nối dây) không được vẽ và không lan truyền.
+  const GRAPH = {
+    A: {
+      h: 206,
+      nodes: [
+        { id: 'main', x: 340, y: 22, w: 96, h: 30 },
+        { id: 'controller', x: 340, y: 100, w: 220, h: 46, sub: 'đọc + quyết định + ghi + log' },
+        { id: 'adc', x: 62, y: 176, w: 72, h: 30 }, { id: 'uart', x: 150, y: 176, w: 72, h: 30 }, { id: 'pwm', x: 238, y: 176, w: 72, h: 30 },
+        { id: 'diag', x: 442, y: 176, w: 72, h: 30 }, { id: 'can_tx', x: 538, y: 176, w: 80, h: 30 }, { id: 'lcd', x: 628, y: 176, w: 72, h: 30 },
+      ],
+      edges: [['main', 'controller'], ['controller', 'adc'], ['controller', 'uart'], ['controller', 'pwm'],
+              ['diag', 'controller'], ['can_tx', 'controller'], ['lcd', 'controller']],
+    },
+    B: {
+      h: 298,
+      nodes: [
+        { id: 'main', x: 340, y: 20, w: 96, h: 30 },
+        { id: 'controller', x: 340, y: 80, w: 150, h: 34 },
+        { id: 'temp_port', x: 80, y: 145, w: 100, h: 30, iface: true }, { id: 'policy_port', x: 200, y: 145, w: 108, h: 30, iface: true },
+        { id: 'fan_port', x: 320, y: 145, w: 100, h: 30, iface: true }, { id: 'log_port', x: 516, y: 145, w: 100, h: 30, iface: true },
+        { id: 'adc_src', x: 80, y: 275, w: 84, h: 30 }, { id: 'hyst', x: 200, y: 275, w: 84, h: 30 }, { id: 'pwm_fan', x: 320, y: 275, w: 84, h: 30 },
+        { id: 'uart', x: 405, y: 275, w: 64, h: 30 }, { id: 'diag', x: 479, y: 275, w: 64, h: 30 },
+        { id: 'can_tx', x: 553, y: 275, w: 64, h: 30 }, { id: 'lcd', x: 627, y: 275, w: 64, h: 30 },
+      ],
+      edges: [['main', 'controller'],
+              ['controller', 'temp_port'], ['controller', 'policy_port'], ['controller', 'fan_port'], ['controller', 'log_port'],
+              ['adc_src', 'temp_port'], ['hyst', 'policy_port'], ['pwm_fan', 'fan_port'],
+              ['uart', 'log_port'], ['diag', 'log_port'], ['can_tx', 'log_port'], ['lcd', 'log_port']],
+    },
+  };
+
+  // Mỗi yêu cầu: sửa module có sẵn (edit), thêm module mới (add, kèm cạnh của nó), và lời kể cách làm.
+  const REQUESTS = [
+    { id: 'i2c', title: 'Đổi cảm biến từ ADC sang I²C',
+      A: { edit: ['controller'], add: [{ id: 'i2c', x: 340, y: 176, w: 72, h: 30, edges: [['controller', 'i2c']] }],
+           say: 'Viết driver i2c mới, rồi sửa controller để gọi nó thay cho adc (đổi lệnh đọc, đổi cách xử lý mã lỗi).' },
+      B: { edit: ['main'], add: [{ id: 'i2c_src', x: 140, y: 205, w: 84, h: 30, edges: [['i2c_src', 'temp_port']] }],
+           say: 'Viết i2c_src cài đặt temp_port, rồi đổi một dòng trong main để lắp nó vào. controller không đổi.' } },
+    { id: 'flash', title: 'Thêm đích log ra flash',
+      A: { edit: ['controller'], add: [{ id: 'flash', x: 340, y: 176, w: 72, h: 30, edges: [['controller', 'flash']] }],
+           say: 'Viết driver flash, rồi thêm một đoạn ghi flash vào controller, ngay cạnh đoạn in UART.' },
+      B: { edit: ['main'], add: [{ id: 'flash', x: 420, y: 205, w: 64, h: 30, edges: [['flash', 'log_port']] }],
+           say: 'Viết flash cài đặt log_port, đăng ký thêm một dòng trong main.' } },
+    { id: 'policy', title: 'Đổi chính sách quạt sang dải tuyến tính',
+      A: { edit: ['controller'], add: [],
+           say: 'Sửa thẳng đoạn if/else trong controller.' },
+      B: { edit: ['main'], add: [{ id: 'ramp', x: 260, y: 205, w: 64, h: 30, edges: [['ramp', 'policy_port']] }],
+           say: 'Viết ramp cài đặt policy_port, đổi một dòng trong main.' } },
+    { id: 'pc', title: 'Chạy bộ điều khiển trên PC để test tự động',
+      A: { edit: ['controller', 'adc', 'uart', 'pwm'], add: [],
+           say: 'controller gọi thẳng ba driver, nên phải chèn #ifdef HOST vào controller và cả ba driver để chúng không đụng phần cứng.' },
+      B: { edit: [], add: [{ id: 'fake_src', x: 140, y: 205, w: 84, h: 30, edges: [['fake_src', 'temp_port']] }, { id: 'fake_fan', x: 260, y: 205, w: 84, h: 30, edges: [['fake_fan', 'fan_port']] },
+                           { id: 'ram_log', x: 420, y: 205, w: 64, h: 30, edges: [['ram_log', 'log_port']] }, { id: 'main_test', x: 560, y: 80, w: 96, h: 30, edges: [['main_test', 'controller']] }],
+           say: 'Viết bản giả cho ba cổng và một main_test để lắp chúng. Không file nào có sẵn bị sửa.' } },
+    { id: 'port', title: 'Thêm trường “chất lượng đo” vào phép đo nhiệt độ',
+      A: { edit: ['controller', 'adc'], add: [],
+           say: 'Đổi cách adc trả kết quả cho controller, sửa cả hai đầu.' },
+      B: { edit: ['temp_port', 'controller', 'adc_src'], add: [],
+           say: 'Chính cổng đổi, nên mọi bản cài đặt và mọi nơi dùng nó đều phải sửa theo. Đây là điểm yếu của thiết kế B.' } },
+  ];
+
+  // Lan truyền: module đổi → mọi module phụ thuộc vào nó (trực tiếp hay gián tiếp) phải kiểm lại.
+  // Cổng không đổi thì chặn được sự lan truyền, vì không ai phụ thuộc vào bản cài đặt qua cổng.
+  function ripple(design, req) {
+    const spec = req[design];
+    const edges = GRAPH[design].edges.concat(...spec.add.map((n) => n.edges));
+    const changed = new Set([...spec.edit, ...spec.add.map((n) => n.id)]);
+    const affected = new Set(changed);
+    const queue = [...changed];
+    while (queue.length) {
+      const n = queue.pop();
+      for (const [from, to] of edges) if (to === n && !affected.has(from)) { affected.add(from); queue.push(from); }
+    }
+    return { edit: spec.edit.slice(), add: spec.add.map((n) => n.id), retest: [...affected].filter((id) => !changed.has(id)), edges };
+  }
+
+  function rippleTotals(design) {
+    const t = { edit: 0, add: 0, retest: 0 };
+    for (const req of REQUESTS) {
+      const r = ripple(design, req);
+      t.edit += r.edit.length; t.add += r.add.length; t.retest += r.retest.length;
+    }
+    return t;
+  }
+
+  // ===== 3. SRP: hàm thermal_task trước và sau khi tách =====
+  // a: nhóm yêu cầu có thể buộc dòng này đổi (hw, prod, log); reg: dòng chạm thanh ghi hoặc UART.
+  const SRP = {
+    actors: { hw: 'Đội phần cứng', prod: 'Nhóm sản phẩm', log: 'Đội công cụ log' },
+    mono: [{
+      name: 'thermal_task', lines: [
+        { t: 'void thermal_task(void)' }, { t: '{' },
+        { t: '    uint16_t raw = ADC1->DR;', a: 'hw', reg: true },
+        { t: '    int32_t mc = -40000 + (int32_t)raw * 190000 / 4095;', a: 'hw' },
+        { t: '    uint8_t pct = 0;', a: 'prod' },
+        { t: '    if (mc >= 95000)      pct = 100;', a: 'prod' },
+        { t: '    else if (mc >= 85000) pct = 50;', a: 'prod' },
+        { t: '    TIM3->CCR1 = pct * TIM3->ARR / 100;', a: 'hw', reg: true },
+        { t: '    char line[32];', a: 'log' },
+        { t: '    int n = snprintf(line, sizeof line, "T=%ld F=%u\\r\\n", (long)mc, pct);', a: 'log' },
+        { t: '    uart_write(line, n);', a: 'log', reg: true },
+        { t: '}' },
+      ] }],
+    split: [
+      { name: 'read_temp_mc', lines: [
+        { t: 'static int32_t read_temp_mc(void)' }, { t: '{' },
+        { t: '    uint16_t raw = ADC1->DR;', a: 'hw', reg: true },
+        { t: '    return -40000 + (int32_t)raw * 190000 / 4095;', a: 'hw' }, { t: '}' }] },
+      { name: 'fan_percent', lines: [
+        { t: 'static uint8_t fan_percent(int32_t mc)' }, { t: '{' },
+        { t: '    if (mc >= 95000)      return 100;', a: 'prod' },
+        { t: '    if (mc >= 85000)      return 50;', a: 'prod' },
+        { t: '    return 0;', a: 'prod' }, { t: '}' }] },
+      { name: 'set_fan', lines: [
+        { t: 'static void set_fan(uint8_t pct)' }, { t: '{' },
+        { t: '    TIM3->CCR1 = pct * TIM3->ARR / 100;', a: 'hw', reg: true }, { t: '}' }] },
+      { name: 'report', lines: [
+        { t: 'static void report(int32_t mc, uint8_t pct)' }, { t: '{' },
+        { t: '    char line[32];', a: 'log' },
+        { t: '    int n = snprintf(line, sizeof line, "T=%ld F=%u\\r\\n", (long)mc, pct);', a: 'log' },
+        { t: '    uart_write(line, n);', a: 'log', reg: true }, { t: '}' }] },
+      { name: 'thermal_task', lines: [
+        { t: 'void thermal_task(void)' }, { t: '{' },
+        { t: '    int32_t mc  = read_temp_mc();' }, { t: '    uint8_t pct = fan_percent(mc);' },
+        { t: '    set_fan(pct);' }, { t: '    report(mc, pct);' }, { t: '}' }] },
+    ],
+  };
+
+  function srpImpact(design, picked) {
+    const fns = SRP[design];
+    const touched = fns.filter((f) => f.lines.some((l) => picked.includes(l.a)));
+    const edited = fns.reduce((n, f) => n + f.lines.filter((l) => picked.includes(l.a)).length, 0);
+    const retest = touched.reduce((n, f) => n + f.lines.length, 0);
+    const pcOk = touched.length > 0 && touched.every((f) => !f.lines.some((l) => l.reg));
+    // hai nhóm cùng sửa một hàm: dễ xung đột khi gộp nhánh
+    const owners = fns.map((f) => new Set(f.lines.filter((l) => picked.includes(l.a)).map((l) => l.a)).size);
+    return { touched: touched.map((f) => f.name), edited, retest, pcOk, conflict: owners.some((n) => n >= 2) };
+  }
+
+  // ===== 4. OCP: switch(kind) và bảng đăng ký =====
+  const SINKS = [
+    { id: 'uart',  enum: 'SINK_UART',  call: 'uart_write_event(ev);', out: 'UART   t=7 T=96000 F=100 E=0' },
+    { id: 'ram',   enum: 'SINK_RAM',   call: 'ram_push(ev);',         out: 'RAM    ghi bản ghi vào vòng đệm' },
+    { id: 'flash', enum: 'SINK_FLASH', call: 'flash_append(ev);',     out: 'FLASH  nối bản ghi vào trang đang mở' },
+    { id: 'lcd',   enum: 'SINK_LCD',   call: 'lcd_show(ev);',         out: 'LCD    hiện T=96.0 F=100' },
+    { id: 'can',   enum: 'SINK_CAN',   call: 'can_send_event(ev);',   out: 'CAN    gửi 1 khung sự kiện' },
+  ];
+
+  // Mô phỏng log_emit(kind) bằng switch: thiếu break thì rơi tiếp xuống case kế (fall-through).
+  function switchEmit(enabled, missingBreakAfter) {
+    const cases = SINKS.filter((s) => enabled.includes(s.id));
+    const lines = [];
+    for (const target of cases) {
+      let i = cases.indexOf(target);
+      for (;;) {
+        lines.push({ text: cases[i].out, dup: cases[i] !== target });
+        if (cases[i].id !== missingBreakAfter || i + 1 >= cases.length) break;
+        i++;
+      }
+    }
+    return lines;
+  }
+
+  // ===== 5. ISP: giao diện to và các vai trò nhỏ =====
+  const ISP = {
+    funcs: ['read', 'calibrate', 'self_test', 'power_down', 'set_rate_hz', 'get_id'],
+    roles: { sensor_read: ['read'], sensor_identity: ['self_test', 'get_id'], sensor_calibration: ['calibrate'], sensor_power: ['power_down', 'set_rate_hz'] },
+    clients: {
+      thermal_ctl: ['read'],
+      factory_tool: ['read', 'calibrate', 'self_test', 'get_id'],
+      power_mgr: ['power_down', 'set_rate_hz'],
+      diag: ['self_test', 'get_id'],
+    },
+  };
+
+  function ispImpact(fn) {
+    const role = Object.keys(ISP.roles).find((r) => ISP.roles[r].includes(fn));
+    const out = {};
+    for (const [c, used] of Object.entries(ISP.clients)) {
+      const fat = used.includes(fn) ? 'edit' : 'rebuild';
+      const seg = used.includes(fn) ? 'edit' : used.some((u) => ISP.roles[role].includes(u)) ? 'rebuild' : 'none';
+      out[c] = { fat, seg };
+    }
+    return { role, clients: out };
+  }
+
+  function ispFake(client) {
+    const used = ISP.clients[client];
+    const roles = Object.keys(ISP.roles).filter((r) => ISP.roles[r].some((f) => used.includes(f)));
+    const segFns = roles.reduce((n, r) => n + ISP.roles[r].length, 0);
+    return {
+      used, roles,
+      fat: { defined: ISP.funcs.length, stubs: ISP.funcs.length - used.length, lines: ISP.funcs.length + ISP.funcs.length + 2 },
+      seg: { defined: segFns, stubs: segFns - used.length, lines: segFns + roles.reduce((n, r) => n + ISP.roles[r].length + 2, 0) },
+    };
+  }
+
+  // ===== 6. DIP: bao đóng phụ thuộc khi build =====
+  const DIP = {
+    before: {
+      h: 206,
+      nodes: [
+        { id: 'main_board', x: 130, y: 24, w: 120, h: 30 },
+        { id: 'controller', x: 340, y: 24, w: 120, h: 30 },
+        { id: 'adc_driver', x: 340, y: 100, w: 120, h: 30 },
+        { id: 'chip_regs', x: 340, y: 176, w: 120, h: 30, hw: true },
+        { id: 'main_test', x: 560, y: 24, w: 120, h: 30 },
+      ],
+      edges: [['main_board', 'controller'], ['main_test', 'controller'], ['controller', 'adc_driver'], ['adc_driver', 'chip_regs']],
+      picks: { board: ['main_board'], pc: ['main_test'] },
+    },
+    after: {
+      h: 272,
+      nodes: [
+        { id: 'main_board', x: 100, y: 24, w: 120, h: 30 },
+        { id: 'controller', x: 340, y: 24, w: 120, h: 30 },
+        { id: 'main_test', x: 580, y: 24, w: 120, h: 30 },
+        { id: 'temp_port', x: 340, y: 100, w: 120, h: 30, iface: true },
+        { id: 'adc_driver', x: 160, y: 176, w: 120, h: 30 },
+        { id: 'replay_src', x: 520, y: 176, w: 120, h: 30 },
+        { id: 'chip_regs', x: 160, y: 242, w: 120, h: 30, hw: true },
+      ],
+      edges: [['controller', 'temp_port'], ['adc_driver', 'temp_port'], ['replay_src', 'temp_port'],
+              ['adc_driver', 'chip_regs'], ['main_board', 'controller'], ['main_test', 'controller']],
+      // main chọn bản cài đặt và nối dây: các cạnh này không vẽ vì chúng không phải phụ thuộc của controller
+      picks: { board: ['main_board', 'adc_driver'], pc: ['main_test', 'replay_src'] },
+    },
+  };
+
+  function dipBuild(design, target) {
+    const g = DIP[design], seeds = g.picks[target];
+    const seen = new Set(seeds), queue = [...seeds];
+    while (queue.length) {
+      const n = queue.pop();
+      for (const [from, to] of g.edges) if (from === n && !seen.has(to)) { seen.add(to); queue.push(to); }
+    }
+    const files = g.nodes.map((n) => n.id).filter((id) => seen.has(id));
+    const needsHw = files.some((id) => g.nodes.find((n) => n.id === id).hw);
+    // controller chỉ nhìn thấy những gì nó phụ thuộc, bất kể target nào
+    const own = new Set(['controller']), q = ['controller'];
+    while (q.length) {
+      const n = q.pop();
+      for (const [from, to] of g.edges) if (from === n && !own.has(to)) { own.add(to); q.push(to); }
+    }
+    return { files, needsHw, controllerSees: [...own].filter((id) => id !== 'controller'), ok: !(target === 'pc' && needsHw) };
+  }
+
+  // ===== 7. Kiểm tra hướng phụ thuộc (cùng luật với check_deps.py) =====
+  const LAYERS = [
+    ['hal',     /^hal_\w+\.h$/, []],
+    ['port',    /^thermal_ports\.h$/, []],
+    ['service', /^(thermal_ctl|policies|ram_log|tee_log)\.[ch]$/, ['port', 'own']],
+    ['driver',  /^(adc_source|pwm_fan|uart_log|replay_source)\.[ch]$/, ['port', 'hal', 'own']],
+    ['main',    /^main_\w+\.c$/, ['port', 'service', 'driver', 'hal']],
+  ];
+  const layerOf = (name) => { const l = LAYERS.find(([, re]) => re.test(name)); return l ? { layer: l[0], allowed: l[2] } : { layer: null, allowed: null }; };
+  const stem = (name) => name.replace(/\.[ch]$/, '');
+
+  // includes: [[file, header], ...]
+  function checkDeps(includes) {
+    const bad = [];
+    for (const [file, inc] of includes) {
+      const { layer, allowed } = layerOf(file);
+      if (!layer) continue;
+      const target = layerOf(inc).layer;
+      if (stem(inc) === stem(file) || allowed.includes(target)) continue;
+      bad.push(`${file} (${layer}) không được include ${inc} (${target || 'không rõ tầng'})`);
+    }
+    return bad;
+  }
+
+  const LAYER_NODES = [
+    { id: 'thermal_ctl', file: 'thermal_ctl.c', layer: 'service' }, { id: 'policies', file: 'policies.c', layer: 'service' },
+    { id: 'ram_log', file: 'ram_log.c', layer: 'service' }, { id: 'tee_log', file: 'tee_log.c', layer: 'service' },
+    { id: 'thermal_ports', file: 'thermal_ports.h', layer: 'port' },
+    { id: 'adc_source', file: 'adc_source.c', layer: 'driver' }, { id: 'pwm_fan', file: 'pwm_fan.c', layer: 'driver' }, { id: 'uart_log', file: 'uart_log.c', layer: 'driver' },
+    { id: 'hal_adc', file: 'hal_adc.h', layer: 'hal' }, { id: 'hal_pwm', file: 'hal_pwm.h', layer: 'hal' }, { id: 'hal_uart', file: 'hal_uart.h', layer: 'hal' },
+  ];
+  const GOOD_INCLUDES = [
+    ['thermal_ctl.c', 'thermal_ctl.h'], ['thermal_ctl.h', 'thermal_ports.h'], ['policies.c', 'policies.h'], ['policies.h', 'thermal_ports.h'],
+    ['ram_log.c', 'ram_log.h'], ['ram_log.h', 'thermal_ports.h'], ['tee_log.c', 'tee_log.h'], ['tee_log.h', 'thermal_ports.h'],
+    ['adc_source.c', 'adc_source.h'], ['adc_source.h', 'thermal_ports.h'], ['adc_source.c', 'hal_adc.h'],
+    ['pwm_fan.c', 'pwm_fan.h'], ['pwm_fan.h', 'thermal_ports.h'], ['pwm_fan.c', 'hal_pwm.h'],
+    ['uart_log.c', 'uart_log.h'], ['uart_log.h', 'thermal_ports.h'], ['uart_log.c', 'hal_uart.h'],
+  ];
+  const BAD_INCLUDES = [
+    { id: 'b1', file: 'thermal_ctl.c', inc: 'hal_adc.h', text: 'thermal_ctl.c include hal_adc.h' },
+    { id: 'b2', file: 'policies.h', inc: 'uart_log.h', text: 'policies.h include uart_log.h' },
+    { id: 'b3', file: 'adc_source.c', inc: 'thermal_ctl.h', text: 'adc_source.c include thermal_ctl.h' },
+    { id: 'b4', file: 'thermal_ports.h', inc: 'ram_log.h', text: 'thermal_ports.h include ram_log.h' },
+    { id: 'b5', file: 'hal_uart.h', inc: 'uart_log.h', text: 'hal_uart.h include uart_log.h' },
+  ];
+
+  // ===== 8. Bộ điều phối chẩn đoán theo bảng (dạng UDS rút gọn) =====
+  const VIN = Array.from('TESTVIN0000000001', (c) => c.charCodeAt(0));
+  const nrc = (sid, code) => [0x7F, sid, code];
+  const hex = (bytes) => bytes.map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+  const SERVICES = {
+    0x10: { name: 'DiagnosticSessionControl', handle: (r) => r.length !== 2 ? nrc(0x10, 0x13) : [1, 2, 3].includes(r[1]) ? [0x50, r[1], 0x00, 0x32, 0x01, 0xF4] : nrc(0x10, 0x12) },
+    0x11: { name: 'ECUReset', handle: (r) => r.length !== 2 ? nrc(0x11, 0x13) : [1, 2, 3].includes(r[1]) ? [0x51, r[1]] : nrc(0x11, 0x12) },
+    0x14: { name: 'ClearDiagnosticInformation', handle: (r) => r.length !== 4 ? nrc(0x14, 0x13) : [0x54] },
+    0x22: { name: 'ReadDataByIdentifier', handle: (r) => r.length !== 3 ? nrc(0x22, 0x13) : r[1] === 0xF1 && r[2] === 0x90 ? [0x62, 0xF1, 0x90, ...VIN] : nrc(0x22, 0x31) },
+    0x3E: { name: 'TesterPresent', handle: (r) => r.length !== 2 ? nrc(0x3E, 0x13) : r[1] === 0 ? [0x7E, 0x00] : nrc(0x3E, 0x12) },
+  };
+  // Bộ điều phối KHÔNG đổi dù thêm bao nhiêu dịch vụ: chỉ tra bảng.
+  const dispatch = (registered, req) => (registered.includes(req[0]) && SERVICES[req[0]] ? SERVICES[req[0]].handle(req) : nrc(req[0], 0x11));
+
+  return {
+    TS_MIN, TS_MAX, FULL, OK, NOT_READY, FAULT, STEPS, SCENARIO, scale, rawOf, POLICIES, step, replay, changes, runHost,
+    makeHal, IMPLS, contractTests, driveAdc,
+    GRAPH, REQUESTS, ripple, rippleTotals,
+    SRP, srpImpact, SINKS, switchEmit, ISP, ispImpact, ispFake,
+    DIP, dipBuild, LAYERS, LAYER_NODES, GOOD_INCLUDES, BAD_INCLUDES, layerOf, checkDeps,
+    SERVICES, dispatch, hex, nrc,
+  };
+})();
+  </script>
+  <script>
+/* Khung dùng chung cho các mô phỏng nhỏ ở từng phần của bài.
+ * S.sim(id, render) tìm mọi input/select có name trong <section id="id">, rồi gọi render(p, s) mỗi khi
+ * tham số, kích thước khung hay theme đổi:
+ *   p   giá trị các tham số theo name
+ *   s   chính mô phỏng: s.root, s.put(name, chữ | phần tử) điền vào phần tử có data-out="name",
+ *       s.views là các canvas trong section theo thứ tự: { ctx, w, h }
+ * Nút có data-act="tên" gọi s.onAct(tên, nút).
+ * S.graph vẽ đồ thị phụ thuộc bằng SVG, S.palette đọc bảng màu từ CSS để canvas ăn theo theme. */
+globalThis.S = (function () {
+  const sims = [];
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  function palette() {
+    const cs = getComputedStyle(document.documentElement);
+    const get = (name) => cs.getPropertyValue(name).trim();
+    return {
+      text: get('--text'), muted: get('--muted'), faint: get('--faint'), border: get('--border'),
+      accent: get('--accent'), indigo: get('--indigo'), green: get('--green'), ochre: get('--ochre'), mono: get('--mono'),
+    };
+  }
+
+  function fit(v) {                                  // canvas sắc nét: kích thước thật = kích thước CSS × devicePixelRatio
+    const dpr = window.devicePixelRatio || 1;
+    const r = v.canvas.getBoundingClientRect();
+    v.w = r.width; v.h = r.height;
+    v.canvas.width = Math.round(r.width * dpr);
+    v.canvas.height = Math.round(r.height * dpr);
+    v.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  const value = (el) => (el.type === 'checkbox' ? el.checked : el.value !== '' && !isNaN(el.value) ? +el.value : el.value);
+
+  function sim(id, render) {
+    const root = document.getElementById(id);
+    const views = Array.from(root.querySelectorAll('canvas'), (canvas) => ({ canvas, ctx: canvas.getContext('2d'), w: 0, h: 0 }));
+    const controls = Array.from(root.querySelectorAll('input[name], select[name]'));
+    const s = {
+      root, views, p: {},
+      put(name, v) {
+        root.querySelectorAll(`[data-out="${name}"]`).forEach((el) => (v instanceof Node ? el.replaceChildren(v) : (el.textContent = v)));
+      },
+      render() {
+        if (views.some((v) => !v.w)) return;         // chưa đo được kích thước (đang ẩn hoặc chưa bố cục)
+        s.p = Object.fromEntries(controls.map((el) => [el.name, value(el)]));
+        render(s.p, s);
+      },
+      resize() { views.forEach(fit); s.render(); },
+    };
+    controls.forEach((el) => el.addEventListener('input', s.render));
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act]');
+      if (b && s.onAct) s.onAct(b.dataset.act, b);
+    });
+    sims.push(s);
+    if (views.length) new ResizeObserver(() => requestAnimationFrame(s.resize)).observe(root);   // hoãn một nhịp để đổi bố cục trong lúc vẽ không gây vòng lặp
+    else s.render();
+    return s;
+  }
+
+  const redrawAll = () => sims.forEach((s) => s.render());
+  new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+  if (document.fonts) document.fonts.ready.then(redrawAll);
+
+  // ---------- Dựng phần tử ----------
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) (k === 'class' ? (el.className = v) : el.setAttribute(k, v));
+    el.append(...kids);
+    return el;
+  }
+  function sv(tag, attrs, ...kids) {
+    const el = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+    el.append(...kids);
+    return el;
+  }
+
+  // ---------- Đồ thị phụ thuộc ----------
+  // nodes: {id, x, y, w, h, iface, hw, sub, state}   (x, y là tâm)
+  // edges: [từ, tới, lớp] — mũi tên chỉ vào module được phụ thuộc. Lớp 'bad' vẽ sau cùng để nổi trên node.
+  function graph(svg, width, height, nodes, edges, labels) {
+    const mk = svg.dataset.mk || (svg.dataset.mk = 'mk' + Math.random().toString(36).slice(2, 8));
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.replaceChildren(sv('defs', {}, sv('marker', { id: mk, class: 'g-head', viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 8, markerHeight: 8, markerUnits: 'userSpaceOnUse', orient: 'auto' }, sv('path', { d: 'M0 0L8 4L0 8z' })),
+                                      sv('marker', { id: mk + 'b', class: 'g-head bad', viewBox: '0 0 8 8', refX: 7, refY: 4, markerWidth: 8, markerHeight: 8, markerUnits: 'userSpaceOnUse', orient: 'auto' }, sv('path', { d: 'M0 0L8 4L0 8z' }))));
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    const clip = (n, tx, ty) => {                    // giao điểm của đường thẳng từ tâm n tới (tx, ty) với biên hình chữ nhật
+      const dx = tx - n.x, dy = ty - n.y;
+      const t = Math.min(dx ? n.w / 2 / Math.abs(dx) : Infinity, dy ? n.h / 2 / Math.abs(dy) : Infinity);
+      return [n.x + dx * t, n.y + dy * t];
+    };
+    const edgeEl = ([a, b, cls]) => {
+      const A = byId[a], B = byId[b];
+      if (!A || !B) return null;
+      const [x1, y1] = clip(A, B.x, B.y), [x2, y2] = clip(B, A.x, A.y);
+      return sv('line', { class: 'g-edge' + (cls ? ' ' + cls : ''), x1, y1, x2, y2, 'marker-end': `url(#${mk}${cls === 'bad' ? 'b' : ''})` });
+    };
+    for (const l of labels || []) svg.append(sv('text', { class: 'g-label', x: l.x, y: l.y }, l.text));
+    edges.filter((e) => e[2] !== 'bad').forEach((e) => { const el = edgeEl(e); if (el) svg.append(el); });
+    for (const n of nodes) {
+      const g = sv('g', { class: ['g-node', n.iface ? 'iface' : '', n.hw ? 'hw' : '', n.state ? 'n-' + n.state : ''].filter(Boolean).join(' ') });
+      g.append(sv('rect', { x: n.x - n.w / 2, y: n.y - n.h / 2, width: n.w, height: n.h }));
+      if (n.sub) {
+        g.append(sv('text', { x: n.x, y: n.y - 2, 'text-anchor': 'middle' }, n.id));
+        g.append(sv('text', { class: 'g-sub', x: n.x, y: n.y + 13, 'text-anchor': 'middle' }, n.sub));
+      } else g.append(sv('text', { x: n.x, y: n.y + 4, 'text-anchor': 'middle' }, n.id));
+      svg.append(g);
+    }
+    edges.filter((e) => e[2] === 'bad').forEach((e) => { const el = edgeEl(e); if (el) svg.append(el); });
+  }
+
+  // ---------- Vẽ biểu đồ nhịp trên canvas ----------
+  // Trục x là chỉ số nhịp 0..n-1. series: [{ data, color, width, step, dash, dots }]; null trong data = bỏ điểm.
+  function plot(v, c, opts) {
+    const { ctx, w, h } = v;
+    const L = 40, R = 10, T = 22, B = 18;
+    const { n, min, max, series, title, unit, bands, marks, ticks } = opts;
+    const xOf = (i) => L + (i / (n - 1)) * (w - L - R);
+    const yOf = (val) => T + (1 - (val - min) / (max - min)) * (h - T - B);
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '11px ' + c.mono;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = c.text; ctx.textAlign = 'left';
+    ctx.fillText(title, 8, 13);
+    for (const b of bands || []) {                   // dải nền: {from, to, color}
+      ctx.fillStyle = b.color; ctx.globalAlpha = 0.16;
+      ctx.fillRect(xOf(b.from - 0.5), T, xOf(b.to + 0.5) - xOf(b.from - 0.5), h - T - B);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = c.muted; ctx.textAlign = 'right';
+    for (const t of ticks) {
+      const y = yOf(t);
+      ctx.strokeStyle = c.border; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(w - R, y); ctx.stroke();
+      ctx.fillText(t + unit, L - 5, y + 4);
+    }
+    ctx.textAlign = 'center';
+    for (let i = 0; i < n; i += 2) ctx.fillText(i, xOf(i), h - 4);
+    for (const m of marks || []) {                   // đường ngang đứt: {value, color}
+      ctx.strokeStyle = m.color; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(L, yOf(m.value)); ctx.lineTo(w - R, yOf(m.value)); ctx.stroke(); ctx.setLineDash([]);
+    }
+    for (const s of series) {
+      ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.width || 1.75; ctx.lineJoin = 'round';
+      ctx.setLineDash(s.dash || []);
+      ctx.beginPath();
+      let pen = false, prev = 0;
+      s.data.forEach((val, i) => {
+        if (val === null) { pen = false; return; }
+        const x = xOf(i), y = yOf(val);
+        if (!pen) ctx.moveTo(x, y);
+        else if (s.step) { ctx.lineTo(x, yOf(prev)); ctx.lineTo(x, y); }
+        else ctx.lineTo(x, y);
+        pen = true; prev = val;
+      });
+      ctx.stroke(); ctx.setLineDash([]);
+      if (s.dots) s.data.forEach((val, i) => { if (val !== null) { ctx.beginPath(); ctx.arc(xOf(i), yOf(val), 2.5, 0, Math.PI * 2); ctx.fill(); } });
+    }
+    if (opts.cursor !== undefined) {                 // nhịp đang xem
+      ctx.strokeStyle = c.accent; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(xOf(opts.cursor), T); ctx.lineTo(xOf(opts.cursor), h - B); ctx.stroke();
+    }
+  }
+
+  new ResizeObserver((entries) => {
+    for (const { target: w } of entries) {
+      if (w.scrollWidth > w.clientWidth) w.tabIndex = 0;
+      else w.removeAttribute('tabindex');
+    }
+  }).observe(...document.querySelectorAll('.graph-wrap'));
+
+  return { sim, palette, h, sv, graph, plot };
+})();
+  </script>
+  <script>
+/* Mô phỏng đầu bài: một yêu cầu thay đổi lan ra bao nhiêu module. Lan truyền tính bằng Core.ripple. */
+(function () {
+  const { GRAPH, REQUESTS, ripple, rippleTotals } = Core;
+  const totals = { A: rippleTotals('A'), B: rippleTotals('B') };
+
+  S.sim('sim-ripple', (p, s) => {
+    const req = REQUESTS.find((r) => r.id === p.req);
+    for (const d of ['A', 'B']) {
+      const g = GRAPH[d], r = ripple(d, req), spec = req[d];
+      const nodes = g.nodes.map((n) => ({ ...n, state: r.edit.includes(n.id) ? 'edit' : r.retest.includes(n.id) ? 'test' : '' }));
+      spec.add.forEach((a) => nodes.push({ ...a, state: 'new' }));
+      const svg = s.root.querySelector(`svg[data-g="${d}"]`);
+      S.graph(svg, 680, g.h, nodes, r.edges);
+      svg.setAttribute('aria-label', `Thiết kế ${d}, yêu cầu “${req.title}”. Sửa: ${r.edit.join(', ') || 'không có'}. Thêm mới: ${r.add.join(', ') || 'không có'}. Phải kiểm lại: ${r.retest.join(', ') || 'không có'}.`);
+      const k = d.toLowerCase();
+      s.put('say' + d, spec.say);
+      s.put(k + 'E', r.edit.length); s.put(k + 'N', r.add.length); s.put(k + 'T', r.retest.length);
+      s.put(k + 'E5', totals[d].edit); s.put(k + 'N5', totals[d].add); s.put(k + 'T5', totals[d].retest);
+    }
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng Single Responsibility: yêu cầu của từng nhóm chạm vào những dòng nào, trước và sau khi tách. */
+(function () {
+  const { SRP, srpImpact } = Core;
+
+  S.sim('sim-srp', (p, s) => {
+    const picked = ['hw', 'prod', 'log'].filter((k) => p[k]);
+    const imp = srpImpact(p.design, picked);
+    const frag = document.createDocumentFragment();
+    for (const f of SRP[p.design]) {
+      const hasReg = f.lines.some((l) => l.reg);
+      const box = S.h('div', { class: 'fn' });
+      box.append(S.h('div', { class: 'fn-head' }, S.h('span', {}, f.name + '()'), S.h('span', { class: 'badge ' + (hasReg ? 'hw' : 'pure') }, hasReg ? 'chạm phần cứng' : 'thuần số')));
+      const body = S.h('div', { class: 'fn-body' });
+      f.lines.forEach((l, i) => {
+        body.append(S.h('div', { class: 'ln' + (l.a ? ' a-' + l.a : '') + (picked.includes(l.a) ? ' hit' : '') }, S.h('i', {}, String(i + 1)), S.h('code', {}, l.t)));
+      });
+      box.append(body);
+      frag.append(box);
+    }
+    s.put('code', frag);
+    s.put('edited', imp.edited);
+    s.put('touched', imp.touched.length ? imp.touched.join(', ') : '–');
+    s.put('retest', imp.touched.length ? imp.retest + ' dòng' : '–');
+    s.put('pc', !picked.length ? '–' : imp.pcOk ? 'có' : 'không');
+    let msg;
+    if (!picked.length) msg = 'Chọn ít nhất một nhóm để xem yêu cầu của họ chạm vào đâu.';
+    else {
+      const names = picked.map((k) => SRP.actors[k]).join(' và ');
+      msg = `${names}: ${imp.edited} dòng bị sửa, ${imp.touched.length} hàm bị chạm, phải kiểm lại ${imp.retest} dòng. `
+        + (imp.pcOk ? 'Hàm bị chạm không đụng thanh ghi nên test được trên PC. ' : 'Có hàm đụng thanh ghi hoặc UART nên cần phần cứng mới thử được. ')
+        + (imp.conflict ? 'Nhiều nhóm cùng sửa một hàm: dễ xung đột khi gộp nhánh.' : '');
+    }
+    s.put('msg', msg);
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng Open/Closed: thêm đích log bằng switch và bằng bảng đăng ký. */
+(function () {
+  const { SINKS, switchEmit } = Core;
+
+  const line = (text, cls) => S.h('div', { class: 'ln' + (cls ? ' ' + cls : '') }, S.h('i', {}, ''), S.h('code', {}, text));
+
+  S.sim('sim-ocp', (p, s) => {
+    const enabled = SINKS.filter((k) => p[k.id]).map((k) => k.id);
+    const on = SINKS.filter((k) => enabled.includes(k.id));
+    const added = on.length - 1;                     // UART là đích có từ đầu
+    const bugOn = p.bug && enabled.includes('flash');
+
+    const sw = document.createDocumentFragment();
+    sw.append(line(`typedef enum { ${on.map((k) => k.enum).join(', ')} } sink_kind_t;`, added ? 'hit' : ''));
+    sw.append(line('void log_emit(sink_kind_t kind, const log_event_t *ev)'));
+    sw.append(line('{'));
+    sw.append(line('    switch (kind) {'));
+    on.forEach((k, i) => {
+      const brk = bugOn && k.id === 'flash' ? '' : ' break;';
+      const text = `    case ${k.enum}:`.padEnd(20) + k.call.padEnd(24) + brk + (brk ? '' : ' /* quên break */');
+      sw.append(line(text.trimEnd(), i ? 'hit' : ''));
+    });
+    sw.append(line('    }'));
+    sw.append(line('}'));
+    s.put('swCode', sw);
+
+    const reg = document.createDocumentFragment();
+    reg.append(line('/* tee_log.c, không đổi */'));
+    reg.append(line('for (i = 0; i < t->n; i++) t->out[i].ops->emit(t->out[i].ctx, ev);'));
+    reg.append(line(''));
+    reg.append(line('/* nơi lắp ráp: mỗi đích một dòng */'));
+    const reg2 = { uart: 'uart_log_sink()', ram: 'ram_log_sink(&ram)', flash: 'flash_log_sink()', lcd: 'lcd_log_sink()', can: 'can_log_sink()' };
+    on.forEach((k, i) => reg.append(line(`tee_log_add(&tee, ${reg2[k.id]});`, i ? 'new' : '')));
+    s.put('regCode', reg);
+
+    const swOut = document.createDocumentFragment();
+    for (const l of switchEmit(enabled, bugOn ? 'flash' : null)) swOut.append(S.h('li', { class: l.dup ? 'dup' : '' }, l.text + (l.dup ? '   ← lặp: rơi từ case Flash xuống' : '')));
+    s.put('swOut', swOut);
+    const regOut = document.createDocumentFragment();
+    for (const k of on) regOut.append(S.h('li', {}, k.out));
+    s.put('regOut', regOut);
+
+    s.put('swEdit', added * 2); s.put('swNew', added); s.put('swTest', added ? 'log_emit (mọi case)' : '0');
+    s.put('regNew', added); s.put('regWire', added);
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng Liskov: bốn bản cài đặt của cổng nhiệt độ chạy cùng một kịch bản; bộ test hợp đồng đối chiếu với kết quả. */
+(function () {
+  const { STEPS, SCENARIO, driveAdc, contractTests } = Core;
+  const NAMES = ['adc', 'zero', 'deci', 'spin'];
+  const tests = Object.fromEntries(NAMES.map((n) => [n, contractTests(n)]));
+  const base = driveAdc('adc');
+  const MSG = {
+    adc: 'adc_source giữ cả ba điều của hợp đồng: cảm biến đứt thì báo TS_FAULT, controller đặt quạt 100% rồi quay lại bình thường khi hết lỗi.',
+    zero: 'zero trả TS_OK, 0 khi lỗi. Controller tin đó là 0 °C, chính sách hysteresis chuyển sang “tắt” và giữ trạng thái đó cả sau khi lỗi đã hết.',
+    deci: 'deci trả đơn vị khác. Controller thấy nhiệt độ bằng 1/100 sự thật nên quạt chỉ chạy khi cảm biến đứt (lúc đó nó báo lỗi đúng).',
+    spin: 'spin cho đúng kết quả, nên hai đồ thị y hệt bản đúng. Vi phạm chỉ lộ ra ở thời gian: mỗi lần đọc chặn 48 ms thay vì quay về ngay.',
+  };
+
+  S.sim('sim-lsp', (p, s) => {
+    const c = S.palette();
+    const run = driveAdc(p.impl);
+    const view = run.seen.map((mc) => (mc === null ? null : mc / 1000));
+    const band = [{ from: 8, to: 11, color: c.accent }];
+    S.plot(s.views[0], c, {
+      n: STEPS, min: 0, max: 110, ticks: [0, 20, 40, 60, 80, 100], unit: '', bands: band,
+      title: 'Nhiệt độ, °C (nền đỏ: cảm biến đứt dây)',
+      marks: [{ value: 85, color: c.muted }, { value: 95, color: c.muted }],
+      series: [
+        { data: SCENARIO.map((v) => v / 1000), color: c.faint, width: 1.5, dots: true },
+        { data: view, color: c.indigo, width: 2, dots: true },
+      ],
+    });
+    S.plot(s.views[1], c, {
+      n: STEPS, min: 0, max: 100, ticks: [0, 50, 100], unit: '%', bands: band,
+      title: 'Lệnh quạt, % (xanh: bản đúng, đỏ: bản đang chọn)',
+      series: [
+        { data: base.fan, color: c.green, width: 3, step: true },
+        { data: run.fan, color: c.accent, width: 1.75, step: true },
+      ],
+    });
+
+    const body = document.createDocumentFragment();
+    for (const n of NAMES) {
+      const t = tests[n];
+      const cell = (ok) => S.h('td', { class: ok ? 'pass' : 'fail' }, ok ? 'đạt' : 'rớt');
+      body.append(S.h('tr', { class: n === p.impl ? 'sel' : '' },
+        S.h('th', { scope: 'row' }, n), cell(t.measure), cell(t.fault), cell(t.nonblock),
+        S.h('td', {}, String(t.elapsed).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' µs')));
+    }
+    s.put('tests', body);
+    s.put('danger', run.fan.filter((f, i) => SCENARIO[i] >= 95000 && f === 0).length);
+    s.put('diff', run.fan.filter((f, i) => f !== base.fan[i]).length);
+    s.put('msg', MSG[p.impl]);
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng Interface Segregation: đổi một hàm thì ai phải build lại, và bản giả phải viết bao nhiêu hàm. */
+(function () {
+  const { ISP, ispImpact, ispFake } = Core;
+  const LABEL = { edit: 'phải sửa', rebuild: 'build lại + test lại', none: 'không ảnh hưởng' };
+  const line = (text, cls) => S.h('div', { class: 'ln' + (cls ? ' ' + cls : '') }, S.h('i', {}, ''), S.h('code', {}, text));
+
+  S.sim('sim-isp', (p, s) => {
+    const imp = ispImpact(p.fn), fake = ispFake(p.client);
+
+    const head = S.h('tr', {}, S.h('th', {}, 'Bên dùng'), ...ISP.funcs.map((f) => S.h('th', { class: f === p.fn ? 'col-hit' : '' }, f)),
+      S.h('th', {}, 'Giao diện to'), S.h('th', {}, 'Vai trò nhỏ'));
+    s.put('ispHead', head);
+    const body = document.createDocumentFragment();
+    for (const [c, used] of Object.entries(ISP.clients)) {
+      body.append(S.h('tr', { class: c === p.client ? 'sel' : '' }, S.h('th', { scope: 'row' }, c),
+        ...ISP.funcs.map((f) => S.h('td', { class: f === p.fn ? 'col-hit' : '' }, used.includes(f) ? '●' : '')),
+        S.h('td', { class: 'st-' + imp.clients[c].fat }, LABEL[imp.clients[c].fat]),
+        S.h('td', { class: 'st-' + imp.clients[c].seg }, LABEL[imp.clients[c].seg])));
+    }
+    s.put('ispBody', body);
+
+    const fat = document.createDocumentFragment();
+    fat.append(line('static const sensor_ops_t FAKE = {'));
+    for (const f of ISP.funcs) fat.append(line(`    ${fake.used.includes(f) ? 'fake_' : 'stub_'}${f},`.padEnd(26) + (fake.used.includes(f) ? '/* dùng */' : '/* hàm rỗng */'), fake.used.includes(f) ? 'new' : 'hit'));
+    fat.append(line('};'));
+    s.put('fatCode', fat);
+    const seg = document.createDocumentFragment();
+    for (const r of fake.roles) {
+      const fns = ISP.roles[r];
+      seg.append(line(`static const ${r}_ops_t FAKE_${r.slice(7).toUpperCase()} = {`, 'new'));
+      fns.forEach((f) => seg.append(line(`    fake_${f},`, 'new')));
+      seg.append(line('};', 'new'));
+    }
+    s.put('segCode', seg);
+
+    const count = (key) => Object.values(imp.clients).filter((c) => c[key] === 'rebuild').length;
+    s.put('who', p.client);
+    s.put('fn2', p.fn);
+    s.put('fatRebuild', count('fat') + ' bên build lại');
+    s.put('segRebuild', count('seg') + ' bên build lại');
+    s.put('fatStubs', `${fake.fat.defined} (${fake.fat.stubs} hàm rỗng)`);
+    s.put('segStubs', `${fake.seg.defined} (${fake.seg.stubs} hàm rỗng)`);
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng Dependency Inversion: tập module phải biên dịch khi build bài test trên PC, trước và sau khi đảo phụ thuộc. */
+(function () {
+  const { DIP, dipBuild } = Core;
+
+  S.sim('sim-dip', (p, s) => {
+    const g = DIP[p.design], b = dipBuild(p.design, p.target);
+    const nodes = g.nodes.map((n) => ({ ...n, state: b.files.includes(n.id) ? (n.hw && !b.ok ? 'edit' : 'test') : '' }));
+    const svg = s.root.querySelector('svg[data-g="dip"]');
+    S.graph(svg, 680, g.h, nodes, g.edges);
+    svg.setAttribute('aria-label', `Đồ thị phụ thuộc, thiết kế “${p.design === 'before' ? 'trước' : 'sau'}”, build cho ${p.target === 'pc' ? 'PC' : 'board thật'}. Phải biên dịch: ${b.files.join(', ')}.`);
+    s.put('count', b.files.length + ' (' + b.files.join(', ') + ')');
+    s.put('sees', b.controllerSees.length + ' (' + b.controllerSees.join(', ') + ')');
+    s.put('hw', b.needsHw ? 'có' : 'không');
+    let msg;
+    if (p.target === 'board') msg = 'Board thật có chip nên build được ở cả hai thiết kế. Khác biệt nằm ở chỗ controller nhìn thấy bao nhiêu thứ.';
+    else if (!b.ok) msg = 'Không dựng được bài test: controller kéo theo adc_driver, và adc_driver kéo theo chip_regs, thứ chỉ tồn tại trên chip.';
+    else msg = 'Dựng được trên PC: controller chỉ biết temp_port, bài test lắp replay_src vào cổng đó và không chạm tới chip_regs.';
+    s.put('msg', msg);
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng module nhiệt độ: bản JavaScript của main_host.c với điểm lắp ráp chọn được. */
+(function () {
+  const { STEPS, SCENARIO, runHost } = Core;
+  const WINDOWS = { normal: [-1, -1], fault: [8, 11], cold: [1, 3] };
+  const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+  S.sim('sim-module', (p, s) => {
+    const c = S.palette();
+    const [from, to] = WINDOWS[p.source];
+    const run = runHost(p.policy, from, to);
+    const t = p.tick;
+    const band = from >= 0 ? [{ from, to, color: c.accent }] : [];
+    S.plot(s.views[0], c, {
+      n: STEPS, min: 50, max: 110, ticks: [60, 70, 80, 90, 100], unit: '', bands: band, cursor: t,
+      title: 'Nhiệt độ controller nhận được, °C',
+      marks: [{ value: 85, color: c.faint }, { value: 95, color: c.faint }],
+      series: [{ data: run.events.map((e) => (e.fault ? null : e.mc / 1000)), color: c.indigo, width: 2, dots: true }],
+    });
+    S.plot(s.views[1], c, {
+      n: STEPS, min: 0, max: 100, ticks: [0, 50, 100], unit: '%', bands: band, cursor: t,
+      title: 'Lệnh quạt, %',
+      series: [{ data: run.fan, color: c.accent, width: 2, step: true }],
+    });
+
+    s.put('tickOut', 'nhịp ' + t);
+    s.put('changes', run.changes);
+    s.put('faults', run.faults);
+
+    // đích log: chỉ nhìn các sự kiện đã xảy ra tới nhịp t
+    const seen = run.events.slice(0, t + 1);
+    let log;
+    if (p.sink === 'ram') {
+      const keep = seen.slice(-8);
+      const rows = keep.map((e) => S.h('tr', { class: e.tick === t ? 'sel' : '' }, S.h('td', {}, e.tick), S.h('td', {}, fmt(e.mc)), S.h('td', {}, e.percent), S.h('td', {}, e.fault)));
+      log = S.h('table', { class: 'dense' },
+        S.h('thead', {}, S.h('tr', {}, ...['tick', 'milli_c', 'percent', 'fault'].map((x) => S.h('th', {}, x)))),
+        S.h('tbody', {}, ...rows));
+      log = S.h('div', {}, S.h('p', { class: 'pane-sub' }, `ram_log: vòng đệm 8 bản ghi, đang giữ ${keep.length}${seen.length > 8 ? ` (đã ghi đè ${seen.length - 8})` : ''}`), log);
+    } else if (p.sink === 'uart') {
+      const text = seen.slice(-8).map((e) => `t=${e.tick} T=${e.mc} F=${e.percent} E=${e.fault}`).join('\n');
+      log = S.h('div', {}, S.h('p', { class: 'pane-sub' }, 'uart_log: các dòng đã gửi (8 dòng cuối)'), S.h('pre', { class: 'report' }, text));
+    } else log = S.h('p', { class: 'pane-sub' }, 'Sink rỗng: sự kiện được nhận rồi bỏ đi. Controller không hề biết.');
+    s.put('log', log);
+
+    const e = run.events[t];
+    s.put('msg', e.fault
+      ? `Nhịp ${t}: cảm biến báo mã lỗi ${e.fault}. Controller không gọi chính sách, đặt quạt ${e.percent}% (an toàn) và ghi fault = ${e.fault}.`
+      : `Nhịp ${t}: controller nhận ${fmt(e.mc)} mC (${(SCENARIO[t] / 1000).toFixed(0)} °C), chính sách trả ${e.percent}%, quạt nhận ${e.percent}%.`);
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng embedded: cùng một lõi, ba target. Số dòng đếm từ chính các file C của bài. */
+(function () {
+  const CORE = { files: ['thermal_ports.h', 'thermal_ctl.h', 'thermal_ctl.c', 'policies.h', 'policies.c', 'ram_log.h', 'ram_log.c', 'tee_log.h', 'tee_log.c'], loc: 166 };
+  const BOARD = { files: ['adc_source.h', 'adc_source.c', 'pwm_fan.h', 'pwm_fan.c', 'uart_log.h', 'uart_log.c', 'main_board.c'], loc: 93 };
+  const HOST = { files: ['replay_source.h', 'replay_source.c', 'main_host.c'], loc: 102 };
+  const TARGETS = {
+    board: { own: BOARD, vendor: 'hal_chip_a.c', cc: 'cc -o thermal.elf', msg: 'Board hiện tại: lõi cộng driver cộng main_board.c, link với HAL của chip A do nhà sản xuất cung cấp.' },
+    board2: { own: BOARD, vendor: 'hal_chip_b.c', cc: 'cc -o thermal.elf', msg: 'Đổi sang chip B: danh sách file của bạn không đổi, chỉ file HAL của nhà sản xuất đổi. Không dòng nào của module bị sửa.' },
+    pc: { own: HOST, vendor: null, cc: 'gcc -o host', msg: 'PC: bản giả thay driver và harness thay main_board.c; không có thanh ghi nên test chạy được ở bất kỳ máy nào.' },
+  };
+  const ul = (files, extra) => {
+    const frag = document.createDocumentFragment();
+    files.forEach((f) => frag.append(S.h('li', {}, f)));
+    if (extra) frag.append(S.h('li', { class: 'vendor' }, extra + ' (HAL của nhà sản xuất, không tính vào số dòng)'));
+    return frag;
+  };
+
+  S.sim('sim-target', (p, s) => {
+    const t = TARGETS[p.target];
+    s.put('core', ul(CORE.files));
+    s.put('own', ul(t.own.files, t.vendor));
+    const cfiles = [...CORE.files, ...t.own.files, ...(t.vendor ? [t.vendor] : [])].filter((f) => f.endsWith('.c'));
+    const cmd = document.createDocumentFragment();
+    cmd.append(S.h('div', { class: 'ln' }, S.h('i', {}, ''), S.h('code', {}, `${t.cc} \\`)));
+    cfiles.forEach((f, i) => cmd.append(S.h('div', { class: 'ln' }, S.h('i', {}, ''), S.h('code', {}, '    ' + f + (i + 1 < cfiles.length ? ' \\' : '')))));
+    s.put('cmd', cmd);
+    s.put('coreLoc', CORE.loc);
+    s.put('ownLoc', t.own.loc);
+    s.put('share', (100 * CORE.loc / (CORE.loc + t.own.loc)).toFixed(1) + '%');
+    s.put('msg', t.msg);
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng firmware: kiểm tra hướng phụ thuộc, cùng bảng luật với check_deps.py. */
+(function () {
+  const { LAYER_NODES, GOOD_INCLUDES, BAD_INCLUDES, checkDeps } = Core;
+  const ROW = { service: 30, port: 100, driver: 170, hal: 240 };
+  const X = { thermal_ctl: 160, policies: 280, ram_log: 400, tee_log: 520, thermal_ports: 340, adc_source: 200, pwm_fan: 340, uart_log: 480, hal_adc: 200, hal_pwm: 340, hal_uart: 480 };
+  const stem = (f) => f.replace(/\.[ch]$/, '');
+  const nodes = LAYER_NODES.map((n) => ({ id: n.id, x: X[n.id], y: ROW[n.layer], w: n.id === 'thermal_ports' ? 112 : 100, h: 28 }));
+  const good = [];
+  for (const [file, inc] of GOOD_INCLUDES) {
+    const a = stem(file), b = stem(inc);
+    if (a !== b && !good.some((e) => e[0] === a && e[1] === b)) good.push([a, b]);
+  }
+  const labels = [{ x: 4, y: 34, text: 'dịch vụ' }, { x: 4, y: 104, text: 'cổng' }, { x: 4, y: 174, text: 'driver' }, { x: 4, y: 244, text: 'HAL' }];
+
+  S.sim('sim-layers', (p, s) => {
+    const bad = BAD_INCLUDES.filter((b) => p[b.id]);
+    const svg = s.root.querySelector('svg[data-g="layers"]');
+    S.graph(svg, 680, 266, nodes, good.concat(bad.map((b) => [stem(b.file), stem(b.inc), 'bad'])), labels);
+    const problems = checkDeps([...GOOD_INCLUDES, ...bad.map((b) => [b.file, b.inc])]);
+    svg.setAttribute('aria-label', `Đồ thị include giữa các tầng; có ${problems.length} include sai hướng.`);
+    s.put('report', problems.length ? problems.join('\n') + `\n\n${problems.length} vi phạm, mã thoát 1` : 'OK: không có include sai hướng\n\nmã thoát 0');
+  });
+})();
+  </script>
+  <script>
+/* Mô phỏng bộ điều phối chẩn đoán theo bảng (dạng UDS rút gọn). */
+(function () {
+  const { SERVICES, dispatch, hex } = Core;
+  const PRESET = { base: ['s10', 's22', 's3e'], std: ['s10', 's11', 's22', 's3e'], full: ['s10', 's11', 's14', 's22', 's3e'] };
+  const SID = { s10: 0x10, s11: 0x11, s14: 0x14, s22: 0x22, s3e: 0x3E };
+  const HANDLER = { 0x10: 'session_control', 0x11: 'ecu_reset', 0x14: 'clear_dtc', 0x22: 'read_data_by_id', 0x3E: 'tester_present' };
+  const NRC = { 0x11: 'serviceNotSupported: SID không có trong bảng đăng ký', 0x12: 'subFunctionNotSupported', 0x13: 'incorrectMessageLengthOrInvalidFormat', 0x31: 'requestOutOfRange: DID không tồn tại' };
+  const line = (text, cls) => S.h('div', { class: 'ln' + (cls ? ' ' + cls : '') }, S.h('i', {}, ''), S.h('code', {}, text));
+  const hx = (n) => '0x' + n.toString(16).toUpperCase().padStart(2, '0');
+
+  const root = document.getElementById('sim-diag');
+  root.querySelector('select[name="variant"]').addEventListener('input', (e) => {      // đăng ký trước S.sim nên chạy trước lần vẽ lại
+    for (const name of Object.keys(SID)) root.querySelector(`input[name="${name}"]`).checked = PRESET[e.target.value].includes(name);
+  });
+
+  S.sim('sim-diag', (p, s) => {
+    const registered = Object.keys(SID).filter((k) => p[k]).map((k) => SID[k]);
+    const table = document.createDocumentFragment();
+    table.append(line('static const diag_service_t SERVICES[] = {'));
+    registered.forEach((sid) => table.append(line(`    { ${hx(sid)}, ${HANDLER[sid]} },`.padEnd(34) + `/* ${SERVICES[sid].name} */`, 'new')));
+    table.append(line('};'));
+    s.put('table', table);
+
+    const req = p.req.split(' ').map((b) => parseInt(b, 16));
+    const rsp = dispatch(registered, req);
+    s.put('reqHex', hex(req));
+    s.put('rspHex', rsp.length > 8 ? hex(rsp.slice(0, 8)) + ' … (' + rsp.length + ' byte)' : hex(rsp));
+    let meaning;
+    if (rsp[0] === 0x7F) meaning = `Từ chối dịch vụ ${hx(rsp[1])}, NRC ${hx(rsp[2])} ${NRC[rsp[2]] || ''}`;
+    else if (rsp[0] === 0x62) meaning = `Đúng: ${hx(req[0])} + 0x40 = ${hx(rsp[0])}, kèm DID và 17 byte VIN “${String.fromCharCode(...rsp.slice(3))}”`;
+    else meaning = `Đúng: ${hx(req[0])} + 0x40 = ${hx(rsp[0])}`;
+    s.put('meaning', meaning);
+    s.put('n', registered.length);
+    s.put('swEdit', Math.max(0, registered.length - 3) + ' case thêm vào hàm đã chạy');
+    s.put('msg', registered.includes(req[0])
+      ? `Dịch vụ ${hx(req[0])} có trong bảng nên diag_dispatch gọi ${HANDLER[req[0]]}.`
+      : `Dịch vụ ${hx(req[0])} không có trong bảng nên diag_dispatch trả NRC 0x11, không cần hàm xử lý nào.`);
+  });
+})();
+  </script>
+</body>
+</html>
