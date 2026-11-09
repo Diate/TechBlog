@@ -1,6 +1,20 @@
 /* Tự sinh bởi scripts/lib/posts-index.mjs từ posts/*.html, đừng sửa tay. */
 window.POSTS = [
   {
+    "slug": "can-bus",
+    "title": "CAN bus từ đầu đến cuối: tín hiệu, khung, lỗi, CAN FD và STM32",
+    "date": "2026-11-09",
+    "tags": [
+      "can",
+      "automotive",
+      "embedded",
+      "stm32",
+      "simulation"
+    ],
+    "summary": "CAN bus giải thích từ lý thuyết đến mã: tín hiệu vi sai, điện trở kết thúc, phân xử không phá hủy, khung 0x120 dựng từng bit (chèn bit, CRC, ACK), lỗi và bus-off, thời gian bit, CAN FD và TDC, FDCAN trên STM32G474, DBC. Mỗi phần có mô phỏng riêng và một ví dụ tính tay.",
+    "cover": "packets"
+  },
+  {
     "slug": "dsp-sensor-pipeline",
     "title": "Pipeline DSP cho dữ liệu cảm biến: từ mẫu thô đến đặc trưng",
     "date": "2026-11-01",
