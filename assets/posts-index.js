@@ -54,5 +54,19 @@ window.POSTS = [
     ],
     "summary": "Năm nguyên tắc SOLID giải thích bằng ví dụ C nhỏ, mỗi nguyên tắc có mô phỏng riêng và một ví dụ tính tay để kiểm lại. Sau đó ráp thành một module điều khiển quạt chạy thật và áp dụng vào embedded, firmware, automotive.",
     "cover": "blocks"
+  },
+  {
+    "slug": "stm32-to-bldc",
+    "title": "Từ một dòng mã STM32 đến động cơ BLDC quay: thanh ghi, bộ định thời và cầu MOSFET",
+    "date": "2026-11-10",
+    "tags": [
+      "stm32",
+      "bldc",
+      "embedded",
+      "firmware",
+      "simulation"
+    ],
+    "summary": "Lần theo một dòng mã STM32F767 đến lúc động cơ BLDC quay: BSRR và địa chỉ thanh ghi, bản đồ bộ nhớ, RCC, cảm biến Hall, chuyển mạch sáu bước, PWM căn giữa 20 kHz, thời gian chết, mạch lái cổng, cầu MOSFET và vòng tốc độ PI. Mỗi phần có mô phỏng riêng, trích nguyên văn RM0410, DS11532, PM0253 và hướng dẫn tự phát triển.",
+    "coverSvg": "<svg viewBox=\"0 0 320 180\">\n      <rect class=\"ink\" x=\"26\" y=\"64\" width=\"54\" height=\"52\"/>\n      <path class=\"hair\" d=\"M26 76h-10M26 90h-10M26 104h-10M80 76h10M80 90h10M80 104h10\"/>\n      <path class=\"line thick\" d=\"M98 118h16V78h16v40h16V78h16v40h16V78\"/>\n      <path class=\"hair\" d=\"M98 128h96\"/>\n      <circle class=\"soft\" cx=\"246\" cy=\"90\" r=\"50\"/>\n      <circle class=\"line\" cx=\"246\" cy=\"90\" r=\"50\"/>\n      <circle class=\"ink\" cx=\"246\" cy=\"90\" r=\"22\"/>\n      <path class=\"line thick\" d=\"M246 90l34-26\"/>\n      <path class=\"hair\" d=\"M246 40v-12M246 140v12M196 90h-12M296 90h12\"/>\n    </svg>"
   }
 ];
