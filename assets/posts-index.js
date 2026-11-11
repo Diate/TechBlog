@@ -27,6 +27,19 @@ window.POSTS = [
     "summary": "Đi qua từng khối của một pipeline DSP cho dữ liệu cảm biến: lấy mẫu, Q-format, FIR, cửa sổ trượt, detrend, RMS và kurtosis, FFT, band energy. Mỗi phần có mô phỏng riêng để tự chỉnh tham số và một ví dụ tính tay để kiểm lại."
   },
   {
+    "slug": "how-bldc-works",
+    "title": "Động cơ BLDC hoạt động thế nào: nam châm, sáu bước chuyển mạch, cảm biến Hall và vòng PI",
+    "date": "2026-11-11",
+    "tags": [
+      "bldc",
+      "động cơ",
+      "điều khiển",
+      "simulation"
+    ],
+    "summary": "Nguyên lý động cơ BLDC từ đầu: stator và rôto nam châm, sức điện động ngược, chuyển mạch sáu bước và vector từ thông, góc 90° và gợn mô-men, bộ nghịch lưu và thời gian chết, cảm biến Hall, điều khiển không cảm biến, PWM lưỡng cực và đơn cực, đo tốc độ bằng phương pháp M và T, vòng PI, gợn mô-men khi chuyển mạch, đấu sai dây Hall và vì sao xe điện dùng Hall còn drone dùng không cảm biến. Mỗi phần có mô phỏng riêng, sơ đồ và một ví dụ tính tay.",
+    "coverSvg": "<svg viewBox=\"0 0 320 180\">\r\n      <circle class=\"soft\" cx=\"104\" cy=\"90\" r=\"64\"/>\r\n      <circle class=\"line\" cx=\"104\" cy=\"90\" r=\"64\"/>\r\n      <path class=\"hair\" d=\"M104 26v14M104 154v-14M48.6 58l12.1 7M159.4 122l-12.1-7M48.6 122l12.1-7M159.4 58l-12.1 7\"/>\r\n      <circle class=\"ink\" cx=\"104\" cy=\"90\" r=\"26\"/>\r\n      <path class=\"pale\" d=\"M104 90l24-15 6 10z\"/>\r\n      <path class=\"line thick\" d=\"M104 90l26-16\"/>\r\n      <path class=\"hair\" d=\"M196 124h12l12-34 12 0 12 34 12 0 12-34\"/>\r\n      <path class=\"line thick\" d=\"M190 112l10-28h30l10 28 10 28h30l10-28\"/>\r\n      <path class=\"hair\" d=\"M190 90h122\"/>\r\n    </svg>"
+  },
+  {
     "slug": "rf-iot-tcu-wireless",
     "title": "RF trong IoT và TCU ô tô: từ link budget đến khung dữ liệu trên không",
     "date": "2026-11-03",
