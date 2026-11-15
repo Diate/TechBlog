@@ -1,0 +1,2262 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hiệu năng RF của thiết bị IoT: từ dBm đến antenna diversity · Tech Blog</title>
+  <meta name="description" content="Hiệu năng RF của thiết bị IoT học từ nền móng: dB và dBm, suy hao, tạp âm và độ nhạy, công suất phát, link budget hai chiều, selectivity, channel rejection và blocking, sống chung trong băng 2.4 GHz, fading và antenna diversity. Mỗi phần có mô phỏng riêng và một ví dụ tính tay; cuối bài là cách đọc datasheet, lập ngân sách liên kết và chẩn đoán lỗi ngoài hiện trường.">
+  <template id="cover">
+    <svg viewBox="0 0 320 180">
+      <path class="hair" d="M24 150h272"/>
+      <circle class="ink" cx="64" cy="108" r="7"/>
+      <path class="line thick" d="M64 108V72"/>
+      <path class="line" d="M83.7 94.2A24 24 0 0 1 83.7 121.8"/>
+      <path class="line" d="M100 82.7A44 44 0 0 1 100 133.3"/>
+      <path class="line" d="M116.4 71.3A64 64 0 0 1 116.4 144.7"/>
+      <path class="hair dash" d="M178 120h120"/>
+      <path class="soft" d="M190 150v-52h14v52zM214 150v-30h14v30zM238 150v-70h14v70zM262 150v-18h14v18z"/>
+      <path class="line" d="M190 98h14M238 80h14"/>
+    </svg>
+  </template>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script src="../assets/js/main.js"></script>
+  <style>
+    /* CSS riêng của bài này */
+    .post .eq { margin: 0 0 1.4em; padding: .55rem 0 .55rem 1rem; border-left: 2px solid var(--accent); font: .9375rem/1.7 var(--mono); overflow-x: auto; }
+    .post .toc { font-size: .9375em; line-height: 1.45; columns: 1; padding-left: 1.4em; }
+    .post .toc li { margin: .2em 0; }
+
+    /* Ví dụ tính tay: vạch đỏ bên trái, để phân biệt với phần giải thích */
+    .post .calc { margin: 1.75em 0; padding: .1rem 0 .1rem 1rem; border-left: 2px solid var(--accent); }
+    .post .calc > :last-child { margin-bottom: 0; }
+    .post .calc .calc-title { margin: 0 0 .75rem; font: .75rem/1.5 var(--mono); color: var(--muted); }
+    .post .calc table { margin: .9em 0; }
+    /* Khung "Đi làm": điều rút ra để dùng được, vạch xanh chàm */
+    .post .work { margin: 1.75em 0; padding: .1rem 0 .1rem 1rem; border-left: 2px solid var(--indigo); }
+    .post .work > :last-child { margin-bottom: 0; }
+    .post .work .calc-title { margin: 0 0 .5rem; font: .75rem/1.5 var(--mono); color: var(--indigo); }
+    .post .try { font-size: .9375em; color: var(--muted); }
+    .post .try b { color: var(--text); font-weight: 600; }
+    .post td code, .post th code { white-space: nowrap; }
+    .post table.big { display: block; overflow-x: auto; }
+    .post table.num td, .post table.num th { font-variant-numeric: tabular-nums; }
+    .post table.num td.r, .post table.num th.r { text-align: right; }
+    .post table.risk td, .post table.risk th { font-size: .8125rem; line-height: 1.45; vertical-align: top; padding-right: .75rem; }
+    .post table.risk td:first-child { color: var(--accent); font: 600 .75rem/1.45 var(--mono); }
+    .post details { margin: 0 0 .75em; font-size: .9375em; }
+    .post details summary { cursor: pointer; font-weight: 600; }
+    .post .tag-ok { color: var(--green); } .post .tag-bad { color: var(--accent); }
+
+    /* Mô phỏng */
+    .sim .h-xs { height: 5rem; }
+    .sim .h-sm { height: 7.5rem; }
+    .sim .h-md { height: 10rem; }
+    .sim .h-lg { height: 14rem; }
+    .sim .h-xl { height: 18rem; }
+    .sim .h-2xl { height: 24rem; }
+    .sim .h-pre { height: 14.5rem; }
+    @media (max-width: 40rem) { .sim .h-2xl { height: 28rem; } }
+    .sim table { margin: 0 0 1rem; }
+    .sim .sim-actions { margin-top: .75rem; }
+    .sim-controls { flex-direction: column; align-items: stretch; gap: 0; }
+    .ctl-group { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 0; border-top: 1px solid var(--border); }
+    .ctl-group:first-child { padding-top: 0; border-top: 0; }
+    .ctl-group .sim-actions { margin-top: 0; }
+    .ctl-title { flex: 1 0 100%; font: .75rem/1.4 var(--mono); color: var(--text); }
+    @media (min-width: 40.01rem) { .sim-controls input[type="range"] { width: 7rem; } }
+    .sim-controls output { min-width: 4.25rem; color: var(--text); font-variant-numeric: tabular-nums; }
+    .sim-controls .check { cursor: pointer; }
+    .sim-controls .check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent); }
+    .sim canvas + canvas { margin-top: .75rem; border-top: 1px solid var(--border); padding-top: .75rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 20px; font: .75rem/1.4 var(--mono); color: var(--muted); margin-top: 12px; }
+    .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c); }
+    .sim .status { margin: .75rem 0 0; font: .8125rem/1.55 var(--mono); color: var(--muted); }
+    .sim .status b { color: var(--text); font-weight: 500; }
+    .sim .status .bad { color: var(--accent); }
+    .sim .status .good { color: var(--green); }
+    .sim .scroll { overflow-x: auto; margin: 1rem 0 0; }
+    .sim .scroll table { margin: 0; min-width: max-content; }
+    .sim table.grid { font: .75rem/1.3 var(--mono); border-collapse: collapse; }
+    .sim table.grid th, .sim table.grid td { padding: .3rem .5rem; border: 1px solid var(--border); text-align: center; font-weight: 400; }
+    .sim table.grid th.row, .sim table.grid td.row { text-align: left; color: var(--muted); }
+    .sim table.grid td.hit { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); font-weight: 600; }
+    .sim table.grid td.ok { background: color-mix(in srgb, var(--green) 28%, var(--surface)); }
+    .sim table.grid td.bad { background: color-mix(in srgb, var(--accent) 24%, var(--surface)); }
+    .sim table.steps { font: .8125rem/1.4 var(--mono); border-collapse: collapse; width: 100%; }
+    .sim table.steps th, .sim table.steps td { padding: .4rem .5rem .4rem 0; border-bottom: 1px solid var(--border); text-align: left; font-weight: 400; }
+    .sim table.steps td.r, .sim table.steps th.r { text-align: right; font-variant-numeric: tabular-nums; }
+    .sim table.steps tr.sum td { border-top: 1px solid var(--rule); font-weight: 600; color: var(--text); }
+    .sim table.steps td.why { color: var(--muted); }
+    .sim select { font: .8125rem var(--mono); padding: .35rem .4rem; background: var(--bg); color: var(--text); border: 1px solid var(--rule); border-radius: 2px; max-width: 100%; }
+    @media (max-width: 40rem) {
+      .sim-controls label.check { flex: 1 1 calc(50% - .75rem); justify-content: flex-start; }
+      .sim table.steps td.why { display: none; }
+    }
+
+    /* Sơ đồ: tô nền theo vai trò */
+    .diagram svg.wide { width: clamp(36rem, calc(100% - 2.2rem), 52rem); }
+    .diagram .fillA { fill: color-mix(in srgb, var(--indigo) 18%, var(--bg)); }
+    .diagram .fillB { fill: color-mix(in srgb, var(--green) 18%, var(--bg)); }
+    .diagram .fillC { fill: color-mix(in srgb, var(--ochre) 20%, var(--bg)); }
+    .diagram .fillN { fill: color-mix(in srgb, var(--accent) 22%, var(--bg)); }
+    .diagram .acc { stroke: var(--accent); stroke-width: 2; fill: none; }
+    .diagram .ind { stroke: var(--indigo); stroke-width: 1.5; fill: none; }
+    .diagram .grn { stroke: var(--green); stroke-width: 1.5; fill: none; }
+    .diagram .thin { stroke: var(--faint); stroke-width: 1; fill: none; }
+    .diagram text.acc, .diagram text.ind, .diagram text.grn { stroke: none; }
+    .diagram text.acc { fill: var(--accent); } .diagram text.ind { fill: var(--indigo); } .diagram text.grn { fill: var(--green); }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="container post">
+      <h1>Hiệu năng RF của thiết bị IoT: từ dBm đến antenna diversity</h1>
+      <p class="post-meta">
+        <time datetime="2026-11-15">2026-11-15</time>
+        <span>#rf</span>
+        <span>#iot</span>
+        <span>#wireless</span>
+        <span>#simulation</span>
+      </p>
+
+      <p>Một con chip radio chỉ có ba việc: nói đủ to, nghe đủ nhạy, và không bị điếc khi xung quanh ồn. Bài này dựng từng việc từ nền móng, từ dB và tiếng ồn đến link budget, blocking và hai ăng-ten, để đọc được datasheet, tính được tầm xa, chọn được kênh và chẩn đoán được khi sản phẩm "lúc được lúc không" ngoài hiện trường.</p>
+
+      <section class="sim" id="sim-main" aria-label="Mô phỏng tổng: công tắc Zigbee nói chuyện với hub trong nhà có Wi-Fi">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Đường truyền từ công tắc tới hub">
+            <label>Khoảng cách tới hub <input name="d" type="range" min="1" max="120" step="1" value="30"><output data-out="d"></output></label>
+            <label>Hệ số suy hao N <input name="n" type="range" min="2" max="4" step="0.1" value="3.2"><output data-out="n"></output></label>
+            <label>Công suất phát <input name="ptx" type="range" min="-10" max="20" step="1" value="10"><output data-out="ptx"></output></label>
+            <label>Độ nhạy gốc của hub <input name="s0" type="range" min="-110" max="-90" step="0.1" value="-101"><output data-out="s0"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Router Wi-Fi cạnh hub">
+            <label class="check"><input name="wifi" type="checkbox" checked> Wi-Fi đang phát (+20 dBm)</label>
+            <label>Router cách hub <input name="dw" type="range" min="0.3" max="20" step="0.1" value="3"><output data-out="dw"></output></label>
+            <label>Kênh Zigbee cách tâm Wi-Fi <input name="df" type="range" min="9" max="40" step="0.5" value="22.5"><output data-out="df"></output></label>
+          </div>
+        </div>
+        <canvas class="h-xl" role="img" aria-label="Biểu đồ mức công suất theo dBm: cột công suất phát, đoạn suy hao do không khí, cột mức thu tại hub, cùng các vạch độ nhạy gốc và độ nhạy khi có Wi-Fi"></canvas>
+        <canvas class="h-lg" role="img" aria-label="Mức thu theo khoảng cách trên trục logarit, so với độ nhạy gốc và độ nhạy khi có Wi-Fi; giao điểm cho biết tầm xa"></canvas>
+        <div class="legend">
+          <span style="--c: var(--indigo)">công suất phát và mức thu</span>
+          <span style="--c: var(--faint)">phần không khí lấy đi</span>
+          <span style="--c: var(--green)">độ nhạy gốc</span>
+          <span style="--c: var(--accent)">độ nhạy khi Wi-Fi rò vào</span>
+        </div>
+        <div class="sim-stats">
+          <span>Mức thu: <b data-out="prx">–</b></span>
+          <span>Độ nhạy hiệu dụng: <b data-out="seff">–</b></span>
+          <span>Biên: <b data-out="margin">–</b></span>
+          <span>Gói rớt (PER): <b data-out="per">–</b></span>
+          <span>Tầm xa không Wi-Fi: <b data-out="r0">–</b></span>
+          <span>Tầm xa có Wi-Fi: <b data-out="r1">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> mặc định công tắc cách hub 30 m, router Wi-Fi cách hub 3 m: biên 15.2 dB, gói đến đủ. Kéo <b>Router cách hub</b> về 0.3 m (cỡ một bàn chân): blocker từ −29.7 lên −9.7 dBm, độ nhạy hiệu dụng tụt từ −92.7 xuống −73.3 dBm, biên âm 4.1 dB và gần như mọi gói rớt, dù công tắc và hub không đổi gì. Đưa <b>khoảng cách</b> lên 60 m: biên còn 5.6 dB; bỏ chọn Wi-Fi thì biên là 13.9 dB, nghĩa là Wi-Fi một mình ăn mất 8.3 dB. Cuối cùng bật lại Wi-Fi, đưa router về 0.3 m rồi đổi <b>Độ nhạy gốc</b> từ −101 sang −105.4: độ nhạy hiệu dụng gần như không nhúc nhích (vẫn −73.3 dBm), vì lúc này Wi-Fi chứ không phải tạp âm nhiệt quyết định, và con chip "nhạy hơn" 4.4 dB không giúp được gì.</p>
+
+      <p>Hình trên là một công tắc Zigbee nói chuyện với hub. Cột trái là công suất công tắc phát, đoạn xám là phần không khí lấy đi, cột phải là mức hub thu được. Vạch xanh là độ nhạy của hub khi yên tĩnh; vạch đỏ là độ nhạy khi tín hiệu Wi-Fi rò vào cái tai của nó. Gói nghe được khi cột phải cao hơn vạch đỏ, không phải vạch xanh. Cả bài là việc đi giải thích từng thành phần của hình này.</p>
+      <p>Mỗi mục theo cùng một nhịp: hình ảnh đời thường trước, một <b>mô phỏng riêng</b> chỉ cho phần đó, một <b>ví dụ tính tay</b> bằng số cụ thể, và một khung <b>Đi làm</b> nói điều rút ra để dùng được. Bài chỉ nói về hiệu năng RF của thiết bị IoT đầu cuối và nơi nó được áp dụng; các giao thức (Zigbee, BLE, Thread) chỉ xuất hiện khi cần một con số cụ thể.</p>
+
+      <div class="note">
+        <p><b>Nguồn và phạm vi.</b> Bài dựng từ một buổi tech talk của Silicon Labs về hiệu năng RF của thiết bị IoT (bản chép lời <code>Transcirp.md</code> và bộ slide <code>tech-talks-rf-performance-in-iot-end-devices.pdf</code>); các chip trong bảng đo là xG24, xG301 của hãng và hai đối thủ A, B <b>do hãng đó tự đo và đặt tên</b>, nên đọc như số liệu của một bên có quyền lợi. Tôi thêm phần nền (dB, tạp âm, suy hao, fading), các phép tính tái hiện số trong slide, và vài phân tích suy ra từ chính các số đó; chỗ nào là suy luận của tôi, bài ghi rõ. Mọi con số trong bài đến từ <code>rf-core.js</code> và <code>check-rf.js</code> ở cuối bài, chạy lại bằng Node. Mô hình là mô hình đơn giản; bài <b>chưa kiểm chứng trên phần cứng thật</b>.</p>
+      </div>
+
+      <ol class="toc">
+        <li><a href="#mieng-tai">Một radio là cái miệng và cái tai</a></li>
+        <li><a href="#db">dB và dBm: đếm bằng số mũ</a></li>
+        <li><a href="#suy-hao">Tín hiệu yếu đi theo khoảng cách</a></li>
+        <li><a href="#do-nhay">Tiếng ồn và độ nhạy</a></li>
+        <li><a href="#thac-per">Độ nhạy là ngưỡng mềm: đường cong PER</a></li>
+        <li><a href="#cong-suat">Công suất phát: to bao nhiêu và trả giá gì</a></li>
+        <li><a href="#link-budget">Link budget: cộng sổ cả hai chiều</a></li>
+        <li><a href="#db-met">Một dB đáng giá bao nhiêu mét</a></li>
+        <li><a href="#mesh">Mesh vẫn cần tầm xa</a></li>
+        <li><a href="#bang-2g4">Băng 2.4 GHz: ba nhóm người thuê chung một hành lang</a></li>
+        <li><a href="#chuoi-thu">Bên trong cái tai: selectivity, channel rejection và blocking</a></li>
+        <li><a href="#bang-blocking">Đọc bảng đo blocking</a></li>
+        <li><a href="#ngoai-doi">Blocker mạnh cỡ nào ngoài đời</a></li>
+        <li><a href="#giao-thuc">Khi radio thua, giao thức gánh, và khách hàng thấy gì</a></li>
+        <li><a href="#multipath">Multipath: đứng yên mà tín hiệu vẫn nhảy</a></li>
+        <li><a href="#hai-tai">Hai tai tốt hơn một: antenna diversity</a></li>
+        <li><a href="#preamble">Chọn ăng-ten trong 128 µs</a></li>
+        <li><a href="#gia-diversity">Giá của diversity và khi nào "đủ tốt" bằng cách khác</a></li>
+        <li><a href="#thuc-hanh">Đọc datasheet và lập ngân sách liên kết cho một sản phẩm thật</a></li>
+        <li><a href="#hien-truong">Chẩn đoán ngoài hiện trường, tự kiểm tra và tổng kết</a></li>
+      </ol>
+
+      <h2 id="mieng-tai">Một radio là cái miệng và cái tai</h2>
+      <p>Hai người nói chuyện trong một quán ăn ồn. Người nói có giọng to hay nhỏ. Người nghe có đôi tai tốt hay kém. Giữa họ là khoảng cách, làm tiếng nói yếu đi trên đường tới tai; xung quanh là tiếng ồn của quán, có khi là một ban nhạc ở góc phòng và bàn bên cạnh cũng đang nói chuyện. Cuộc trò chuyện chỉ chạy khi tiếng nói tới tai còn đủ lớn so với những thứ làm nhiễu. Một thiết bị IoT là đúng cảnh đó, và năm chỉ số RF trong bài tương ứng với năm thứ trong quán ăn.</p>
+
+      <table>
+        <thead><tr><th>Trong quán ăn</th><th>Trong radio</th><th>Chỉ số</th><th>Đo bằng</th></tr></thead>
+        <tbody>
+          <tr><td>Giọng to cỡ nào</td><td>Công suất phát</td><td>Output power</td><td>dBm; to hơn = số lớn hơn</td></tr>
+          <tr><td>Nhỏ cỡ nào thì tai vẫn hiểu</td><td>Độ nhạy</td><td>Sensitivity</td><td>dBm; nhạy hơn = số âm sâu hơn</td></tr>
+          <tr><td>Hai việc trên cộng lại, cả hai chiều</td><td>Ngân sách liên kết</td><td>Link budget</td><td>dB</td></tr>
+          <tr><td>Lờ bàn bên cạnh đi, nghe người đối diện</td><td>Chọn lọc kênh</td><td>Selectivity, channel rejection</td><td>dB</td></tr>
+          <tr><td>Vẫn nghe được khi ban nhạc ầm ĩ</td><td>Chống bị chặn</td><td>Blocking</td><td>dBm, hoặc độ nhạy tụt bao nhiêu dB</td></tr>
+          <tr><td>Hai tai: một tai ở chỗ lặng thì tai kia vẫn nghe</td><td>Hai ăng-ten</td><td>Antenna diversity</td><td>dB lợi được</td></tr>
+        </tbody>
+      </table>
+
+      <figure class="diagram">
+        <figcaption>Cả bài trên một đường truyền: mỗi chỉ số nằm ở một khúc</figcaption>
+        <svg viewBox="0 0 680 236" role="img" aria-labelledby="d1-t d1-d">
+          <title id="d1-t">Đường truyền vô tuyến từ bộ phát tới bộ thu và nơi từng chỉ số RF được quyết định</title>
+          <desc id="d1-d">Năm khối nối nhau từ trái sang phải: bộ phát với công suất phát, ăng-ten phát, không khí với suy hao và fading, ăng-ten thu có thể có hai ăng-ten để chọn tốt nhất, và bộ thu gồm bộ lọc, bộ khuếch đại tạp âm thấp và giải điều chế, nơi quyết định độ nhạy, chọn lọc và blocking. Tín hiệu của Wi-Fi, BLE và các mạng Zigbee khác đi vào khối không khí từ bên dưới. Một dấu ngoặc phía trên cho thấy link budget là công suất phát trừ độ nhạy.</desc>
+          <defs>
+            <marker id="d1-h" class="head" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+            <marker id="d1-k" class="head key" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L8 4L0 8z"/></marker>
+          </defs>
+          <path class="thin" d="M60 36V26H628V36"/>
+          <text class="sm muted" x="344" y="18" text-anchor="middle">link budget = công suất phát − độ nhạy, tính cho cả hai chiều</text>
+          <rect class="box fillA" x="8" y="50" width="104" height="60"/><text x="60" y="76" text-anchor="middle">Bộ phát</text><text class="sm muted" x="60" y="94" text-anchor="middle">khuếch đại PA</text>
+          <rect class="box" x="150" y="50" width="104" height="60"/><text x="202" y="76" text-anchor="middle">Ăng-ten</text><text class="sm muted" x="202" y="94" text-anchor="middle">phát</text>
+          <rect class="box key fillC" x="292" y="50" width="104" height="60"/><text x="344" y="76" text-anchor="middle">Không khí</text><text class="sm muted" x="344" y="94" text-anchor="middle">suy hao, fading</text>
+          <rect class="box" x="434" y="50" width="104" height="60"/><text x="486" y="76" text-anchor="middle">Ăng-ten</text><text class="sm muted" x="486" y="94" text-anchor="middle">thu, 1 hoặc 2</text>
+          <rect class="box fillB" x="576" y="50" width="96" height="60"/><text x="624" y="76" text-anchor="middle">Bộ thu</text><text class="sm muted" x="624" y="94" text-anchor="middle">lọc, LNA, demod</text>
+          <path class="line" d="M112 80H148" marker-end="url(#d1-h)"/><path class="line" d="M254 80H290" marker-end="url(#d1-h)"/><path class="line" d="M396 80H432" marker-end="url(#d1-h)"/><path class="line" d="M538 80H574" marker-end="url(#d1-h)"/>
+          <text class="sm ind" x="60" y="130" text-anchor="middle">Output power</text><text class="sm muted" x="60" y="146" text-anchor="middle">mục 6</text>
+          <text class="sm ind" x="344" y="130" text-anchor="middle">Path loss, multipath</text><text class="sm muted" x="344" y="146" text-anchor="middle">mục 3, 15</text>
+          <text class="sm ind" x="486" y="130" text-anchor="middle">Antenna diversity</text><text class="sm muted" x="486" y="146" text-anchor="middle">mục 16 đến 18</text>
+          <text class="sm ind" x="624" y="130" text-anchor="middle">Sensitivity</text><text class="sm ind" x="624" y="146" text-anchor="middle">Selectivity, blocking</text><text class="sm muted" x="624" y="162" text-anchor="middle">mục 4, 11 đến 13</text>
+          <rect class="box key fillN" x="262" y="184" width="164" height="40"/><text x="344" y="208" text-anchor="middle">Wi-Fi, BLE, Zigbee khác</text>
+          <path class="line key" d="M344 184V114" marker-end="url(#d1-k)"/>
+        </svg>
+      </figure>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · một liên kết với đủ ba con số</p>
+        <p class="eq">công tắc phát      +10 dBm<br>không khí lấy đi    80 dB   →   hub nhận 10 − 80 = −70 dBm<br>hub nghe được tới   −95 dBm<br>biên liên kết       −70 − (−95) = 25 dB   (tín hiệu lớn hơn mức tối thiểu 10<sup>2.5</sup> ≈ 316 lần)</p>
+        <p>Biên 25 dB nghe thì dư, nhưng chưa trả lời được "có đủ không". Sau này sẽ thấy cần trừ thêm phần dự phòng cho fading (đến 20 dB, mục 15) và phần độ nhạy bị Wi-Fi ăn mất (mục 11 đến 13).</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Khi nhìn một con chip hay một tờ giới thiệu RF, hỏi ba câu: nói to bao nhiêu, nghe nhạy bao nhiêu, và <b>khi có nhiễu thì nghe còn nhạy bao nhiêu</b>. Hai câu đầu ai cũng in ra; câu thứ ba hiếm khi có trên trang đầu, mà chính nó quyết định sản phẩm có chạy trong một ngôi nhà có Wi-Fi hay không.</p>
+      </div>
+
+      <h2 id="db">dB và dBm: đếm bằng số mũ</h2>
+      <p>Khi nói về số tiền cực lớn, người ta đếm số chữ số 0: một nghìn tỷ là 10<sup>12</sup>. Radio có đúng vấn đề đó: một router Wi-Fi phát 100 mW, trong khi một con chip IoT nghe được tín hiệu chỉ 0.1 pW (10<sup>−13</sup> W). Hai số lệch nhau một nghìn tỷ lần, và nhân chia với nhau liên tục (suy hao, khuếch đại, lọc). Dùng logarit, mọi phép nhân biến thành phép cộng, và các con số trở lại cỡ vài chục đến vài trăm.</p>
+      <p><b>dB</b> là tỉ số công suất viết bằng logarit: <code>dB = 10 · log₁₀(tỉ số)</code>. <b>dBm</b> là mức công suất tuyệt đối tính so với 1 mW: <code>dBm = 10 · log₁₀(P / 1 mW)</code>. Vậy 0 dBm là 1 mW, +20 dBm là 100 mW, −30 dBm là 1 µW. Ba mốc để thuộc: <b>+3 dB gần đúng ×2</b>, <b>+10 dB là ×10</b>, <b>−3 dB gần đúng ÷2</b>; mọi số khác ghép từ ba mốc này.</p>
+
+      <section class="sim" id="sim-db" aria-label="Mô phỏng thang dBm: đổi dBm sang công suất, cộng hai tín hiệu, so sánh tỉ số">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Tín hiệu 1 <input name="p1" type="range" min="-120" max="30" step="1" value="-90"><output data-out="p1"></output></label>
+            <label>Tín hiệu 2 <input name="p2" type="range" min="-120" max="30" step="1" value="-90"><output data-out="p2"></output></label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Thang dBm từ −120 đến +30 với các mốc quen thuộc và ba dấu: tín hiệu 1, tín hiệu 2 và tổng của chúng"></canvas>
+        <div class="legend">
+          <span style="--c: var(--accent)">tín hiệu 1</span>
+          <span style="--c: var(--indigo)">tín hiệu 2</span>
+          <span style="--c: var(--green)">tổng công suất của hai tín hiệu</span>
+        </div>
+        <div class="sim-stats">
+          <span>Tổng: <b data-out="sum">–</b></span>
+          <span>Tín hiệu 1 hơn 2: <b data-out="diff">–</b></span>
+          <span>Tức là gấp: <b data-out="ratio">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> hai tín hiệu bằng nhau (−90 và −90 dBm) cộng lại thành −87 dBm, đúng +3 dB, <b>không phải</b> −180. Kéo tín hiệu 2 xuống dần: tổng bám sát tín hiệu 1; khi tín hiệu 2 yếu hơn 10 dB thì nó chỉ thêm chưa tới 0.5 dB, và yếu hơn 20 dB thì gần như biến mất. Đây cũng là lý do vì sao ở mục 11 một blocker yếu hơn tạp âm thì chẳng làm gì.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · từ Wi-Fi tới độ nhạy</p>
+        <p class="eq">Wi-Fi  +20 dBm  =  10<sup>20/10</sup> mW  =  100 mW<br>độ nhạy  −100 dBm  =  10<sup>−10</sup> mW  =  0.1 pW<br>chênh  20 − (−100)  =  120 dB  =  10<sup>12</sup> lần</p>
+        <table class="num">
+          <thead><tr><th>dB</th><th>+3</th><th>+10</th><th>+20</th><th>−3</th><th>−10</th></tr></thead>
+          <tbody><tr><td>nhân công suất</td><td>×2</td><td>×10</td><td>×100</td><td>×0.5</td><td>×0.1</td></tr></tbody>
+        </table>
+        <p>Một nghìn tỷ lần là khoảng cách giữa bóng đèn 100 W và một chấm sáng 0.1 pW: radio phải vận hành tốt trong cả hai đầu của khoảng đó.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Ba lỗi hay gặp: (1) cộng hai số dBm với nhau; phải đổi về mW, cộng, rồi đổi lại; (2) lẫn dB với dBm: dB là tỉ số, dBm là mức; hiệu của hai dBm mới là dB; (3) nhìn nhầm chiều: <b>−105 dBm nhạy hơn −100 dBm</b>, vì nghe được tín hiệu nhỏ hơn.</p>
+      </div>
+
+      <h2 id="suy-hao">Tín hiệu yếu đi theo khoảng cách</h2>
+      <p>Ném một viên sỏi xuống ao: gợn sóng loang thành vòng tròn lớn dần, và cùng một năng lượng phải trải trên một vòng dài hơn nên chỗ nào cũng yếu đi. Sóng vô tuyến trải ra trên mặt cầu, diện tích mặt cầu tỉ lệ với d², nên <b>nhân đôi khoảng cách thì công suất còn một phần tư, mất 6 dB</b>. Đó là không gian tự do. Trong nhà thì khác: tường, đồ đạc, người hút và chặn sóng, nên công suất giảm nhanh hơn, và người ta viết gộp bằng một <b>hệ số suy hao N</b>:</p>
+      <p class="eq">PL(d) = PL(1 m) + 10 · N · log₁₀(d)        PL(1 m, 2.44 GHz) = 40.2 dB</p>
+      <p>N = 2 là không gian tự do (nhân đôi khoảng cách mất 6 dB), N = 3 mất 9 dB, N = 4 mất 12 dB. Trong nhà N thường nằm giữa 3 và 4, nhiều tường hơn thì cao hơn. Con số 40.2 dB ở 1 m tính từ công thức không gian tự do <code>20·log₁₀(d) + 20·log₁₀(f) − 147.55</code> (d tính bằng mét, f bằng Hz).</p>
+
+      <section class="sim" id="sim-pl" aria-label="Mô phỏng suy hao: mức thu theo khoảng cách và tầm xa, với hệ số N và số bức tường">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Hai đầu liên kết">
+            <label>Công suất phát <input name="ptx" type="range" min="-10" max="20" step="1" value="0"><output data-out="ptx"></output></label>
+            <label>Độ nhạy thu <input name="s" type="range" min="-110" max="-85" step="1" value="-95"><output data-out="s"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Môi trường">
+            <label>Hệ số N <input name="n" type="range" min="2" max="4" step="0.1" value="3"><output data-out="n"></output></label>
+            <label>Số bức tường <input name="walls" type="range" min="0" max="6" step="1" value="0"><output data-out="walls"></output></label>
+            <label>Mỗi tường <input name="lw" type="range" min="0" max="10" step="1" value="5"><output data-out="lw"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Mức thu theo khoảng cách trên trục logarit: đường không gian tự do, đường theo hệ số N đã chọn, vạch độ nhạy và các tầm xa tương ứng"></canvas>
+        <div class="legend">
+          <span style="--c: var(--faint)">không gian tự do, không tường</span>
+          <span style="--c: var(--accent)">môi trường đã chọn</span>
+          <span style="--c: var(--green)">độ nhạy thu</span>
+        </div>
+        <div class="sim-stats">
+          <span>Suy hao ở 10 m: <b data-out="pl10">–</b></span>
+          <span>Mức thu ở 10 m: <b data-out="rx10">–</b></span>
+          <span>Tầm xa (môi trường): <b data-out="r1">–</b></span>
+          <span>Tầm xa (không gian tự do): <b data-out="r0">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> với 0 dBm phát và −95 dBm thu, N = 2 cho tầm xa 550 m, kéo N lên 3 thì chỉ còn 67 m, lên 4 còn 23 m. Quay N về 3 rồi thêm hai bức tường, mỗi bức 5 dB: tầm xa co từ 67 m xuống 31 m. Đường xám (không gian tự do, không tường) gần như không bao giờ đúng trong nhà.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · 10 m, rồi tầm xa của một ngân sách 120 dB</p>
+        <p class="eq">N = 2, 10 m:  40.2 + 20 · log₁₀ 10  = 40.2 + 20 = 60.2 dB<br>N = 4, 10 m:  40.2 + 40 · log₁₀ 10  = 40.2 + 40 = 80.2 dB<br>nhân đôi khoảng cách 10 m → 20 m:  N = 2 mất thêm 6 dB;  N = 4 mất thêm 12 dB<br>ngân sách 120 dB cho tầm xa  10<sup>(120 − 40.2) / (10 N)</sup>:  N = 2 → 9.8 km,  N = 3 → 457 m,  N = 4 → 99 m</p>
+        <p>Cùng một con chip, tầm xa dao động từ cỡ trăm mét tới cỡ chục km chỉ vì chọn N khác nhau. Vì vậy một con số "tầm xa" trong catalog chỉ có nghĩa khi kèm theo N hoặc điều kiện đo (ngoài trời, tầm nhìn thẳng, ăng-ten cao bao nhiêu).</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Muốn biết N của một căn nhà hay một nhà xưởng, đo RSSI ở 1, 2, 4, 8 m rồi vẽ trên trục khoảng cách logarit: <b>mỗi lần nhân đôi khoảng cách, mức thu giảm 3 · N dB</b>. Độ dốc thấp hơn mong đợi thường là sóng đi bằng đường khác (phản xạ); dốc hơn là bị che.</p>
+      </div>
+
+      <h2 id="do-nhay">Tiếng ồn và độ nhạy</h2>
+      <p>Trong quán ồn, người ngồi kế bên thì thầm bạn vẫn nghe được; nhưng khi quán đông lên, họ phải nói to hơn mới nghe được cùng một câu. Bạn không "nghe" khi tiếng nói nhỏ hơn tiếng ồn quá nhiều. Hơn nữa, <b>nghe thấy có tiếng và hiểu được chữ là hai việc khác nhau</b>: độ nhạy của radio là mức tối thiểu để <i>giải mã đúng</i>, không phải mức tối thiểu để phát hiện có sóng.</p>
+      <p>Tiếng ồn tối thiểu của radio có nguồn gốc vật lý: các electron trong mọi vật dẫn rung nhiệt, sinh ra tạp âm nhiệt <b>−174 dBm cho mỗi Hz băng thông</b> (ở nhiệt độ phòng). Máy thu phải nghe cả một băng thông B, nên sàn tạp âm là <code>−174 + 10·log₁₀(B)</code>. Mạch thu thêm tạp âm của chính nó (<b>noise figure</b>, NF, tính bằng dB), và bộ giải điều chế cần tín hiệu lớn hơn tạp âm một mức nhất định (<b>SNR tối thiểu</b>). Cộng lại:</p>
+      <p class="eq">độ nhạy  =  −174 + 10·log₁₀(B)  +  NF  +  SNR tối thiểu         (dBm)</p>
+      <p>Vì sao là số âm: dBm tính so với 1 mW, mà tín hiệu radio nhận được nhỏ hơn 1 mW rất nhiều. Số âm sâu hơn nghĩa là nhạy hơn.</p>
+
+      <section class="sim" id="sim-noise" aria-label="Mô phỏng độ nhạy: sàn tạp âm nhiệt, noise figure và SNR tối thiểu cộng thành độ nhạy">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Mẫu
+              <select name="preset">
+                <option value="custom">tự chỉnh</option>
+                <option value="154" selected>802.15.4, chip tốt (NF 4, SNR 1.6)</option>
+                <option value="ble">BLE 1 Mbps, ví dụ (NF 5, SNR 12)</option>
+              </select>
+            </label>
+            <label>Băng thông
+              <select name="bw">
+                <option value="2000" selected>2 MHz (kênh 802.15.4)</option>
+                <option value="1000">1 MHz (BLE 1 Mbps)</option>
+                <option value="500">500 kHz</option>
+                <option value="250">250 kHz</option>
+              </select>
+            </label>
+          </div>
+          <div class="ctl-group">
+            <label>Noise figure <input name="nf" type="range" min="1" max="12" step="0.1" value="4"><output data-out="nf"></output></label>
+            <label>SNR tối thiểu <input name="snr" type="range" min="-5" max="16" step="0.1" value="1.6"><output data-out="snr"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Biểu đồ thác nước: sàn tạp âm nhiệt, cộng noise figure, cộng SNR tối thiểu, ra độ nhạy; có vạch −85 dBm là mức tối thiểu của chuẩn 802.15.4"></canvas>
+        <div class="sim-stats">
+          <span>Sàn nhiệt kTB: <b data-out="ktb">–</b></span>
+          <span>Độ nhạy: <b data-out="sens">–</b></span>
+          <span>So với −85 dBm của chuẩn 802.15.4: <b data-out="vs85">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> mẫu 802.15.4 cho đúng −105.4 dBm, số mà slide gọi là "best-in-class". Giữ băng thông 2 MHz và kéo NF lên 10 dB: độ nhạy xuống −99.4, tệ hơn 6 dB, và đó là một nửa lý do vì sao hai chip cùng chuẩn cho tầm xa khác nhau. Đổi băng thông xuống 250 kHz: sàn tạp âm tự hạ 9 dB. Nói chậm, nói hẹp thì nghe nhạy hơn, và đó là lý do các radio tốc độ thấp xa hơn rất nhiều.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · chip nghe được −105.4 dBm đang ở đâu so với giới hạn vật lý</p>
+        <p class="eq">kTB (2 MHz)  =  −174 + 10·log₁₀(2·10⁶)  =  −174 + 63.0  =  −111.0 dBm<br>NF + SNR  =  −105.4 − (−111.0)  =  5.6 dB     (ví dụ NF 4 dB, SNR 1.6 dB)<br>chuẩn 802.15.4 chỉ đòi −85 dBm  →  NF + SNR được phép tới 26 dB</p>
+        <p>Chip trong slide chỉ thêm 5.6 dB so với giới hạn nhiệt: gần như chạm trần vật lý. Chuẩn đặt ngưỡng −85 dBm một cách rộng rãi (nới 20 dB) để mọi nhà sản xuất đạt được, nên một chip "đạt chuẩn" và một chip "best-in-class" cách nhau cỡ 20 dB, tức khoảng ×3 tầm xa ở N = 4 (10<sup>20/40</sup>). Số liệu này chỉ cho ví dụ NF 4 và SNR 1.6; slide không công bố cách chia hai thành phần.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Một con số độ nhạy chỉ so sánh được khi cùng <b>giao thức và tốc độ</b> (băng thông khác nhau thì sàn khác), cùng <b>tiêu chí PER</b> (thường 1% với gói 20 byte cho 802.15.4), và cùng <b>đo dẫn</b> hay đo qua ăng-ten. So −105 dBm của 802.15.4 với −97 dBm của BLE là so hai thứ khác nhau.</p>
+      </div>
+
+      <h2 id="thac-per">Độ nhạy là ngưỡng mềm: đường cong PER</h2>
+      <p>Tai người không có công tắc "nghe được / không nghe được" ở một mức âm lượng cố định. Nói nhỏ dần thì lúc đầu vẫn hiểu, rồi bắt đầu mất vài từ, rồi mất cả câu. Radio cũng vậy: đồ thị tỉ lệ gói lỗi (PER) theo công suất thu là một <b>đường cong thác nước</b>. Người ta chọn một điểm quy ước, thường là <b>PER = 1%</b>, và gọi mức công suất ở đó là độ nhạy.</p>
+      <p>Hai hệ quả dùng ngay được. Thứ nhất, sống ở đúng độ nhạy là sống ở mép vực: dưới đó vài dB là rớt gần hết. Thứ hai, chú thích trong slide ("delta là mức tín hiệu cần tăng thêm so với chip chuẩn để nhận gói tương tự") có nghĩa là <b>dịch cả đường cong sang phải bao nhiêu dB</b>.</p>
+
+      <section class="sim" id="sim-per" aria-label="Mô phỏng đường cong PER theo biên so với độ nhạy">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Mức thu so với độ nhạy <input name="m" type="range" min="-8" max="8" step="0.1" value="0"><output data-out="m"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Đường cong PER giảm từ gần 100 phần trăm xuống gần 0 khi mức thu tăng từ thấp hơn 8 dB đến cao hơn 8 dB so với độ nhạy, có điểm đang xét"></canvas>
+        <div class="sim-stats">
+          <span>PER: <b data-out="per">–</b></span>
+          <span>Mất trên 100 gói: <b data-out="lost">–</b></span>
+          <span>Số lần phát trung bình mỗi gói: <b data-out="att">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> ở 0 dB (đúng độ nhạy) PER 1%. Kéo sang trái 2.5 dB: PER 50%, mỗi gói phải phát trung bình hai lần. Sang trái 5 dB: PER 99%. Đi từ gần như hoàn hảo tới gần như chết chỉ trong khoảng 5 dB, hẹp hơn một lần nhân đôi khoảng cách ở N = 3 (9 dB).</p>
+      <p>Đường cong trên là hình dạng điển hình, tôi chọn tham số để PER là 1% tại biên 0 dB và 50% tại −2.5 dB; chip thật lệch nhau vài phần dB.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · ba điểm trên đường cong</p>
+        <p class="eq">biên   0 dB:  PER  1%   →  1 / (1 − 0.01) = 1.01 lần phát mỗi gói<br>biên −2.5 dB:  PER 50%   →  1 / (1 − 0.50) = 2.00 lần phát mỗi gói<br>biên −5 dB:  PER 99%   →  1 / (1 − 0.99) = 100 lần phát mỗi gói</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Đừng thiết kế sao cho mức thu chạm đúng độ nhạy. Biên 0 dB nghĩa là 1% gói rớt trong điều kiện <i>đẹp</i>; mọi dao động (fading, người đi qua, nhiệt độ) đều đẩy xuống vách. Mục 15 và mục 19 tính phần biên dự phòng này.</p>
+      </div>
+
+      <h2 id="cong-suat">Công suất phát: to bao nhiêu và trả giá gì</h2>
+      <p>Muốn người ở xa nghe thấy, bạn nói to hơn; nhưng quát cả ngày thì khản cổ. Bộ khuếch đại công suất (PA) trong radio đổi dòng của pin thành sóng phát đi, và nó không đổi hết: hiệu suất chỉ cỡ vài chục phần trăm, phần còn lại thành nhiệt. Đòi công suất phát gấp đôi là đòi dòng của PA gấp đôi, nhưng lợi lại nhỏ vì suy hao ăn theo logarit: <b>+3 dB là ×2 công suất, mà tầm xa chỉ ×1.41 ở N = 2 và ×1.19 ở N = 4</b>.</p>
+      <p>Có thêm một giới hạn không đến từ kỹ thuật: luật. Mỗi vùng giới hạn công suất phát trong băng 2.4 GHz (châu Âu giới hạn 20 dBm EIRP; Mỹ cho phép cao hơn, đo ở cổng ăng-ten); EIRP tính cả độ lợi ăng-ten, nên chip "+20 dBm" chưa chắc được dùng hết ở thị trường bạn bán. Hãy kiểm tra quy định của vùng đó.</p>
+
+      <section class="sim" id="sim-tx" aria-label="Mô phỏng công suất phát: dòng PA tăng nhanh, tầm xa tăng chậm">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Công suất phát <input name="ptx" type="range" min="-20" max="20" step="1" value="10"><output data-out="ptx"></output></label>
+            <label>Hệ số N <input name="n" type="range" min="2" max="4" step="0.1" value="4"><output data-out="n"></output></label>
+            <label>Hiệu suất PA <input name="eta" type="range" min="10" max="50" step="1" value="25"><output data-out="eta"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="So với 0 dBm: đường dòng điện tổng tăng nhanh theo công suất phát, đường tầm xa tăng chậm hơn nhiều, trục tung logarit"></canvas>
+        <div class="legend">
+          <span style="--c: var(--accent)">dòng điện tổng so với 0 dBm</span>
+          <span style="--c: var(--indigo)">tầm xa so với 0 dBm</span>
+        </div>
+        <div class="sim-stats">
+          <span>Công suất RF: <b data-out="mw">–</b></span>
+          <span>Dòng khi phát: <b data-out="ma">–</b></span>
+          <span>Dòng gấp: <b data-out="ir">–</b></span>
+          <span>Tầm xa gấp: <b data-out="rr">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> để N = 4 và kéo công suất phát từ 0 lên +20 dBm. Công suất RF tăng 100 lần, dòng khi phát tăng 15 lần (nửa đầu rẻ vì dòng nền của chip chiếm phần lớn, nửa sau thì dòng PA lấn át), còn tầm xa chỉ tăng 3.2 lần. Hạ N xuống 2: tầm xa gấp 10 lần, nhưng không gian tự do hiếm khi có trong nhà.</p>
+      <p>Mô hình ở đây lấy ví dụ: dòng nền 8 mA (phần chip chạy dù không phát) cộng dòng PA = công suất RF ÷ (hiệu suất × điện áp 3 V). Hiệu suất, dòng nền và điện áp là số minh hoạ để thấy hình dạng, không phải số của chip nào.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · từ +10 lên +20 dBm, hiệu suất 25%, nguồn 3 V</p>
+        <p class="eq">+10 dBm  =  10 mW  →  PA lấy  10 / 0.25  =  40 mW  →  40 / 3  =  13.3 mA<br>+20 dBm  = 100 mW  →  PA lấy 100 / 0.25  = 400 mW  → 400 / 3  = 133 mA<br>tầm xa, N = 4:  10<sup>10/(10·4)</sup>  =  1.78 lần</p>
+        <p>Trả dòng PA gấp 10 lần để được tầm xa gấp 1.78 lần. Mỗi lần phát gói, năng lượng tính bằng dòng nhân thời gian phát, nên thiết bị chạy pin phát nhiều bị ảnh hưởng nặng nhất.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Công suất phát là cách <b>đắt</b> để mua tầm xa. Các mục sau sẽ cho thấy hai đường rẻ hơn: độ nhạy phía thu (mục 7) và tránh bị nhiễu (mục 11 đến 13). Và nhớ rằng phát to hơn không giúp gì cho chiều ngược lại của liên kết.</p>
+      </div>
+
+      <h2 id="link-budget">Link budget: cộng sổ cả hai chiều</h2>
+      <p>Hai người nói chuyện: A giọng to nhưng tai kém, B giọng nhỏ nhưng tai tốt. A nói gì B cũng nghe rõ. B trả lời, A không nghe nổi. Từ phía A mọi thứ có vẻ ổn (mình nói được rất xa), vậy mà cuộc trò chuyện hỏng. Slide gọi tình huống này là <b>"shouting node syndrome"</b>, nút la hét.</p>
+      <p>Ngân sách liên kết một chiều là công suất phát trừ độ nhạy phía thu: <code>LB = Ptx − S</code>. Một cuộc hội thoại có hai chiều, và <b>nó chỉ tốt bằng chiều yếu hơn</b>:</p>
+      <p class="eq">LB(A→B) = Ptx_A − S_B        LB(B→A) = Ptx_B − S_A        giới hạn = min của hai</p>
+      <p>Từ ngân sách ra tầm xa: <code>d = 10<sup>(LB − C) / (10·N)</sup></code>. Slide dùng N = 4 ("trong nhà") và không nói rõ hằng số C; tôi suy ngược từ số của slide ra <b>C = 34.206 dB</b> (cỡ 34.2), khớp cả ba con số 156.6, 185.1 và 107.1 m (về mặt vật lý: 40.2 dB suy hao ở 1 m trừ 6 dB độ lợi ăng-ten, ví dụ hai ăng-ten 3 dBi; slide không nói vậy, đó là suy luận của tôi). Tỉ số giữa hai tầm xa không phụ thuộc vào C.</p>
+
+      <section class="sim" id="sim-lb" aria-label="Mô phỏng link budget hai chiều giữa hai nút, và tầm xa theo công thức của slide">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Nút X (chip của bạn)">
+            <label>X phát <input name="xtx" type="range" min="-10" max="25" step="0.5" value="19.5"><output data-out="xtx"></output></label>
+            <label>X nghe (độ nhạy) <input name="xs" type="range" min="-110" max="-95" step="0.1" value="-105.4"><output data-out="xs"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Nút Y (đối tác) và môi trường">
+            <label>Nút Y
+              <select name="y">
+                <option value="t" selected>node thường (+10 / −101)</option>
+                <option value="a">Competitor A (+20 / −102)</option>
+                <option value="sl">Silicon Labs (+19.5 / −105.4)</option>
+              </select>
+            </label>
+            <label>Hệ số N <input name="n" type="range" min="2" max="4" step="0.1" value="4"><output data-out="n"></output></label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Hai thanh ngang cho ngân sách của hai chiều X sang Y và Y sang X; chiều yếu hơn được tô nổi và quyết định tầm xa"></canvas>
+        <div class="sim-stats">
+          <span>Tầm xa của liên kết này: <b data-out="range">–</b></span>
+          <span>Chiều yếu hơn: <b data-out="weak">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+        <div class="scroll"><table class="grid" data-out="tbl"></table></div>
+      </section>
+      <p class="try"><b>Thử:</b> mặc định X là chip +19.5 / −105.4 nói với một node thường (+10 / −101): chiều X→Y có 120.5 dB nhưng chiều Y→X chỉ có 115.4 dB, nên tầm xa là 107.1 m. Kéo <b>X phát</b> lên +25 dBm: không có gì đổi, vì chiều yếu là chiều <i>Y nói, X nghe</i>. Kéo <b>X nghe</b> từ −105.4 xuống −106.4 (nhạy hơn 1 dB): chiều yếu tăng 1 dB và tầm xa lên 113.5 m. Chọn Y là Silicon Labs để thấy trường hợp đối xứng: cả hai chiều đều 124.9 dB.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · Silicon Labs nói với node thường, N = 4</p>
+        <p class="eq">SL → thường:  19.5 − (−101)  = 120.5 dB<br>thường → SL:  10 − (−105.4)  = 115.4 dB   ← chiều yếu<br>tầm xa = 10<sup>(115.4 − 34.206) / 40</sup> = 10<sup>2.030</sup> = 107.1 m</p>
+        <p>Đối chiếu slide: hai chip cùng +20 / −102 (đối thủ A) gặp nhau cho 156.6 m; hai chip +19.5 / −105.4 (Silicon Labs) cho 185.1 m, hơn 18%, dù công suất phát thấp hơn 0.5 dB; ba con số này khớp với công thức trong <code>check-rf.js</code>.</p>
+        <p><b>Một chỗ không khớp.</b> Slide ghi "Competitor A với node thường: 83.2 m" và "cải thiện 29%". Với +20 / −102 nói với +10 / −101, tôi tính được chiều yếu là 10 − (−102) = 112 dB, ra <b>88.1 m</b> và mức cải thiện <b>21.6%</b>. Con số 83.2 m ứng với 111 dB, đúng bằng hai node thường nói với nhau (10 + 101); có thể slide đã dùng −101 dBm thay cho −102 dBm ở dòng này. Hướng kết luận (độ nhạy quan trọng hơn công suất khi nói với đối tác yếu) vẫn đúng, nhưng độ lớn thì nhỏ hơn con số in trên slide.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Thiết bị của bạn thường nói chuyện với đủ loại đối tác, trong đó nhiều con có công suất phát thấp. Khi đối tác yếu, <b>chiều yếu là chiều đối tác nói, bạn nghe</b>, nên chỉ có độ nhạy của bạn cải thiện được tầm xa, còn công suất phát của bạn thì không. So chip hãy so tổng <code>Ptx − S</code> <i>và</i> xem chip đó cần dùng được với đối tác nào; đừng chỉ so hai chip với chính nó.</p>
+      </div>
+
+      <h2 id="db-met">Một dB đáng giá bao nhiêu mét</h2>
+      <p>Chênh 3 dB nghe nhỏ xíu, nhưng người bán hàng quy ra "tầm xa gấp 1.4 lần, vùng phủ gấp đôi". Đúng, nhưng chỉ ở <b>N = 2</b> (không gian tự do). Khi thêm Δ dB vào ngân sách, tầm xa nhân với <code>10<sup>Δ / (10·N)</sup></code>, và vùng phủ (diện tích hình tròn bán kính d) nhân với bình phương số đó. N càng lớn thì mỗi dB mua được càng ít mét.</p>
+
+      <section class="sim" id="sim-dbr" aria-label="Mô phỏng đổi dB sang tầm xa và diện tích phủ theo hệ số N">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Thêm vào ngân sách <input name="db" type="range" min="0" max="12" step="0.1" value="3"><output data-out="db"></output></label>
+            <label>Hệ số N <input name="n" type="range" min="2" max="4" step="0.1" value="2"><output data-out="n"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Hai hình tròn đồng tâm: vùng phủ ban đầu và vùng phủ sau khi thêm số dB đã chọn, với bán kính theo tỉ lệ đã tính"></canvas>
+        <div class="sim-stats">
+          <span>Tầm xa gấp: <b data-out="rg">–</b></span>
+          <span>Diện tích phủ gấp: <b data-out="ag">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+        <div class="scroll"><table class="grid" data-out="tbl"></table></div>
+      </section>
+      <p class="try"><b>Thử:</b> để Δ = 3 dB, N = 2: tầm xa ×1.41, diện tích ×2.0, đúng như lời trong buổi nói. Kéo N lên 4: tầm xa ×1.19, diện tích ×1.41. Bảng bên dưới tính sẵn một số mức hay gặp.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · các câu trong buổi nói</p>
+        <p class="eq">3 dB:    N = 2  →  tầm xa ×1.41, diện tích ×2.00      N = 4  →  ×1.19, ×1.41<br>7.3 dB:  N = 2  →  tầm xa ×2.32, diện tích ×5.37      N = 3  →  ×1.75, ×3.07      N = 4  →  ×1.52, ×2.32</p>
+        <p>Người nói nói "chênh 7.3 dB là diện tích phủ kém bốn lần". Số đúng nằm giữa N = 2 (5.4 lần) và N = 3 (3.1 lần), còn trong nhà điển hình N = 4 chỉ là 2.3 lần. Nhận định đúng chiều, nhưng ở trong nhà thì dB đổi ra mét kém hơn nhiều so với cách nói "mỗi 3 dB là gấp đôi vùng phủ".</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Mỗi khi nghe "X dB nghĩa là Y lần tầm xa", hỏi lại <b>N bằng bao nhiêu</b>. Với dự toán trong nhà, dùng N = 3 đến 4: 3 dB chỉ đáng 19% đến 26% tầm xa, và muốn gấp đôi tầm xa ở N = 4 cần 12 dB, tức ×16 công suất phát.</p>
+      </div>
+
+      <h2 id="mesh">Mesh vẫn cần tầm xa</h2>
+      <p>Một câu hay nghe: "mạng mesh mà, tôi chỉ cần tới được nút kế bên, tầm xa không quan trọng". Đúng một nửa. Nửa kia có hai cái giá: bạn không biết nút kế bên nằm ở đâu, và mỗi hop thêm một lần phát, một lần thu, một cơ hội mất gói. Mạng được tối ưu để ít hop, nên <b>tầm xa càng lớn, số hop càng ít</b>, nghĩa là trễ thấp hơn và pin của các nút trung gian đỡ hao.</p>
+
+      <section class="sim" id="sim-mesh" aria-label="Mô phỏng mesh: số hop từ thiết bị đầu cuối tới hub theo tầm xa của mỗi liên kết">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Tầm xa mỗi liên kết <input name="r" type="range" min="10" max="60" step="1" value="16"><output data-out="r"></output></label>
+            <label>Gói qua mỗi hop thành công <input name="p" type="range" min="80" max="100" step="1" value="95"><output data-out="p"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Mặt bằng một ngôi nhà 60 mét nhân 30 mét với hub, các nút trung gian và một thiết bị đầu cuối; đường ít hop nhất giữa thiết bị và hub được tô nổi"></canvas>
+        <div class="legend">
+          <span style="--c: var(--green)">hub</span>
+          <span style="--c: var(--indigo)">thiết bị đầu cuối</span>
+          <span style="--c: var(--faint)">nút trung gian (cắm điện)</span>
+          <span style="--c: var(--accent)">đường ít hop nhất</span>
+        </div>
+        <div class="sim-stats">
+          <span>Số hop: <b data-out="hops">–</b></span>
+          <span>Gói tới nơi: <b data-out="ok">–</b></span>
+          <span>Số lần phát cho một gói: <b data-out="tx">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> ở 16 m, gói đi 4 hop và tới nơi với xác suất 81.5%. Tăng lên 32 m: còn 2 hop và 90.3%. Kéo xuống 12 m: mạng đứt, vì không còn đường nào nối thiết bị tới hub. Bố trí nút trong hình là cố định (không ngẫu nhiên) để các số đối chiếu được trong <code>check-rf.js</code>.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · xác suất tới nơi khi mỗi hop thành công 95%</p>
+        <p class="eq">1 hop: 0.95 = 95.0%      2 hop: 0.95² = 90.3%      3 hop: 0.95³ = 85.7%<br>4 hop: 0.95⁴ = 81.5%      6 hop: 0.95⁶ = 73.5%</p>
+        <p>Gấp đôi tầm xa (16 m lên 32 m) giảm số hop từ 4 xuống 2 trong bố trí này và nâng xác suất từ 81.5% lên 90.3%, chưa tính trễ (mỗi hop thêm một lần phát và một khoảng chờ) và năng lượng phát lại. Xác suất mỗi hop 95% là giả định để minh hoạ; mạng thật có thử lại ở từng hop.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Trong một dự án mesh, tầm xa là thứ quyết định <b>cần bao nhiêu router</b> để phủ một toà nhà: hai chip chênh 3 dB thì ở N = 4 chênh 19% tầm xa, trong một mặt bằng lớn có thể bớt một hàng router. Nhưng đừng cộng nó như một lợi ích tuyệt đối: nó đổi thành trễ, pin và số nút phải mua.</p>
+      </div>
+
+      <h2 id="bang-2g4">Băng 2.4 GHz: ba nhóm người thuê chung một hành lang</h2>
+      <p>Tưởng tượng một hành lang dài thuê chung cho ba nhóm người, không ai điều phối. Nhóm Wi-Fi nói to, nói liên tục, mỗi người chiếm một khoảng rộng 20 MHz. Nhóm BLE nói ngắn, nhảy qua lại 40 điểm. Nhóm 802.15.4 (Zigbee, Thread, Matter over Thread) nói nhỏ, chiếm chỗ hẹp 2 MHz và đứng yên một chỗ. Không ai hỏi ai; cùng lắm một thiết bị nghe thử xem chỗ mình đứng có ai đang nói không rồi mới nói. <b>Với radio, tiếng nói của giao thức khác chỉ là tiếng ồn.</b></p>
+      <p>Công thức kênh đủ để tự tính: Wi-Fi kênh n có tâm <code>2407 + 5n</code> MHz (kênh 1 là 2412, kênh 6 là 2437, kênh 11 là 2462), rộng khoảng 20 MHz, chân phổ ra tới ±11 MHz. 802.15.4 kênh k (11 đến 26) có tâm <code>2405 + 5·(k − 11)</code> MHz, rộng 2 MHz. BLE có 40 kênh cách nhau 2 MHz, trong đó ba kênh quảng bá 37, 38, 39 nằm ở 2402, 2426 và 2480 MHz, chọn đúng vào các khe giữa Wi-Fi.</p>
+
+      <section class="sim" id="sim-band" aria-label="Mô phỏng băng 2.4 GHz: kênh Wi-Fi, kênh 802.15.4 và BLE trên cùng trục tần số, kênh Zigbee nào còn sạch">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Wi-Fi đang dùng">
+            <label class="check"><input name="w1" type="checkbox" checked> Wi-Fi kênh 1</label>
+            <label class="check"><input name="w6" type="checkbox" checked> Wi-Fi kênh 6</label>
+            <label class="check"><input name="w11" type="checkbox" checked> Wi-Fi kênh 11</label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Kênh 802.15.4 và blocker">
+            <label>Kênh 802.15.4 <input name="zc" type="range" min="11" max="26" step="1" value="15"><output data-out="zc"></output></label>
+            <label>Blocker Wi-Fi tại hub <input name="pb" type="range" min="-45" max="-5" step="1" value="-25"><output data-out="pb"></output></label>
+          </div>
+        </div>
+        <canvas class="h-xl" role="img" aria-label="Ba làn trên trục tần số từ 2400 đến 2484 MHz: các khối Wi-Fi, mười sáu kênh 802.15.4 tô màu theo kênh còn sạch hay bị che, và bốn mươi kênh BLE với ba kênh quảng bá nổi bật"></canvas>
+        <div class="legend">
+          <span style="--c: var(--ochre)">Wi-Fi 20 MHz</span>
+          <span style="--c: var(--green)">kênh 802.15.4 còn sạch (cách ≥ 12 MHz)</span>
+          <span style="--c: var(--faint)">kênh 802.15.4 bị che</span>
+          <span style="--c: var(--accent)">kênh đang chọn</span>
+          <span style="--c: var(--indigo)">BLE quảng bá 37, 38, 39</span>
+        </div>
+        <div class="sim-stats">
+          <span>Tần số kênh: <b data-out="f">–</b></span>
+          <span>Cách tâm Wi-Fi gần nhất: <b data-out="df">–</b></span>
+          <span>Độ nhạy hiệu dụng: <b data-out="seff">–</b></span>
+          <span>Kênh còn sạch: <b data-out="clear">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> cả ba Wi-Fi 1, 6, 11 đang bật (cách nhà dân dùng phổ biến nhất): chỉ còn bốn kênh 802.15.4 sạch, 15, 20, 25 và 26. Bỏ chọn Wi-Fi 6 và 11 rồi chọn kênh 802.15.4 số 25: Wi-Fi kênh 1 ở xa tới 63 MHz, độ nhạy hiệu dụng gần như là độ nhạy gốc. Chọn lại kênh 15 trong khi cả ba Wi-Fi bật, rồi kéo blocker từ −25 lên −5: độ nhạy hiệu dụng tụt xuống −53.7 dBm: kênh 15 chỉ "sạch" nghĩa là nằm ngoài dải Wi-Fi, không có nghĩa là miễn nhiễm.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · kênh 15 và kênh 13 so với Wi-Fi kênh 6</p>
+        <p class="eq">802.15.4 kênh 15  =  2405 + 5·(15 − 11)  =  2425 MHz     Wi-Fi 6 = 2407 + 30 = 2437 MHz   →  cách 12 MHz<br>802.15.4 kênh 13  =  2405 + 5·(13 − 11)  =  2415 MHz     cách 2437:  22 MHz<br>kênh sạch  ⇔  cách mọi tâm Wi-Fi ≥ 11 (nửa dải Wi-Fi) + 1 (nửa dải 802.15.4) = 12 MHz</p>
+        <p>Đó cũng là hai khoảng cách trong bảng đo của slide: 12.5 MHz và 22.5 MHz tính từ tâm kênh Wi-Fi. Lời khuyên "chọn Wi-Fi kênh thấp, Zigbee kênh cao" trong buổi nói cũng là điều bạn vừa thấy: kênh 25 và 26 đứng ngoài Wi-Fi kênh 11 và 1.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Khi một sản phẩm 802.15.4 cho phép chọn kênh, đừng để mặc định ở kênh 11 đến 14 (nằm trong Wi-Fi kênh 1). Kênh 15, 20, 25, 26 là bốn kênh nằm ngoài ba kênh Wi-Fi không chồng nhau; nhớ rằng kênh Wi-Fi của <i>hàng xóm</i> không do bạn quyết định. Khoảng cách tần số chỉ làm nhỏ nhiễu đi, không xoá nó: đó là việc của chuỗi thu ở mục sau.</p>
+      </div>
+
+      <h2 id="chuoi-thu">Bên trong cái tai: selectivity, channel rejection và blocking</h2>
+      <p>Trở lại quán ăn, ba kỹ năng khác nhau của đôi tai. <b>Selectivity</b> (độ chọn lọc): bạn tập trung vào người đối diện và lờ đi cuộc nói chuyện ở bàn bên, một thứ cùng loại âm thanh, chỉ khác chỗ. <b>Channel rejection</b>: bàn bên cạnh được nói to đến mức nào trước khi bạn bắt đầu mất chữ; đo bằng số dB giữa tiếng bàn bên và tiếng người đối diện. <b>Blocking</b>: ban nhạc ở góc quán khác hẳn kiểu âm thanh, nhưng to đến mức làm tai quá tải và bạn không nghe nổi gì, kể cả người ngồi sát; đo bằng mức ồn (dBm) tai chịu được.</p>
+      <p>Trong chuỗi thu của chip, ăng-ten đưa tín hiệu qua <b>bộ lọc đầu vào</b> (rộng, cắt những thứ rất xa băng), <b>LNA</b> (khuếch đại tạp âm thấp: phóng đại tín hiệu mà ít thêm nhiễu), <b>mixer</b> (hạ tần), rồi <b>bộ lọc kênh</b> (hẹp: giữ đúng 2 MHz cần nghe), cuối cùng là bộ chuyển đổi và giải điều chế, với <b>AGC</b> (tự điều chỉnh độ khuếch đại theo mức tín hiệu). Một blocker làm hại theo hai cách:</p>
+      <ul>
+        <li><b>Rò qua bộ lọc (tuyến tính).</b> Bộ lọc không cắt vuông vức; một phần blocker lọt vào kênh cần nghe và hoạt động như tạp âm thêm. Mô hình: <code>độ nhạy hiệu dụng = độ nhạy gốc ⊕ (P_blocker − R)</code>, với R là độ chắn (dB) tại khoảng lệch tần đó và ⊕ là cộng công suất. Mỗi dB blocker tăng làm tụt đúng 1 dB độ nhạy.</li>
+        <li><b>Nén (phi tuyến).</b> Blocker mạnh tới mức LNA hay mixer bão hoà, độ khuếch đại sụp, hoặc AGC chủ động giảm độ khuếch đại để tự bảo vệ, làm noise figure tăng. Độ nhạy lúc này tụt nhanh hơn 1 dB cho mỗi dB blocker.</li>
+      </ul>
+      <p>Cái giá: <b>bộ lọc tốt hơn là thêm tầng lọc, tốn diện tích silicon (tốn tiền)</b>; bộ lọc kênh phải chủ động, chỉnh được và tuyến tính, nên <b>tốn dòng khi thu</b>. Cả diện tích lẫn dòng khi thu đều bị cộng vào giá và pin của khách hàng. Slide gọi đây là một sự đánh đổi mà nhà thiết kế phải cân.</p>
+
+      <section class="sim" id="sim-chain" aria-label="Mô phỏng chuỗi thu: blocker rò qua bộ lọc kênh thành tạp âm thêm, hoặc làm bộ thu bị nén">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Blocker và tín hiệu">
+            <label>Blocker <input name="pb" type="range" min="-60" max="0" step="1" value="-10"><output data-out="pb"></output></label>
+            <label>Lệch tần <input name="df" type="range" min="3" max="40" step="0.5" value="12.5"><output data-out="df"></output></label>
+            <label>Tín hiệu cần nghe <input name="sig" type="range" min="-100" max="-40" step="1" value="-80"><output data-out="sig"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Máy thu">
+            <label>Độ chọn lọc <input name="k" type="range" min="2" max="8" step="0.1" value="4.8"><output data-out="k"></output></label>
+            <label class="check"><input name="comp" type="checkbox"> bộ thu bị nén khi blocker mạnh</label>
+            <label>Bắt đầu nén ở <input name="knee" type="range" min="-50" max="0" step="1" value="-35"><output data-out="knee"></output></label>
+          </div>
+        </div>
+        <canvas class="h-xl" role="img" aria-label="Phổ quanh kênh cần nghe: cột tín hiệu cần nghe, cột blocker ở khoảng lệch tần đã chọn, cột phần blocker rò vào kênh sau bộ lọc, cùng vạch độ nhạy gốc và độ nhạy hiệu dụng"></canvas>
+        <div class="legend">
+          <span style="--c: var(--indigo)">tín hiệu cần nghe</span>
+          <span style="--c: var(--accent)">blocker</span>
+          <span style="--c: var(--ochre)">phần blocker rò vào kênh</span>
+          <span style="--c: var(--green)">độ nhạy gốc</span>
+        </div>
+        <div class="sim-stats">
+          <span>Độ chắn R: <b data-out="R">–</b></span>
+          <span>Rò vào kênh: <b data-out="leak">–</b></span>
+          <span>Nén thêm: <b data-out="extra">–</b></span>
+          <span>Độ nhạy hiệu dụng: <b data-out="seff">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> mặc định (blocker −10 dBm ở 12.5 MHz, độ chọn lọc 4.8 dB/MHz) cho R = 55.2 dB và rò −65.2 dBm: độ nhạy tụt từ −102 xuống −65.2 dBm, tín hiệu −80 dBm không nghe được. Tăng <b>độ chọn lọc</b> lên 6.5 (bộ lọc tốt hơn): R tăng 19.6 dB và độ nhạy hiệu dụng cải thiện 19.5 dB (còn −84.7 dBm). Đặt lại độ chọn lọc 4.8 rồi kéo blocker xuống −40 dBm: độ nhạy còn −94.4 dBm, nghe được. Bật <b>nén</b> rồi kéo blocker lên −10: có thêm 25 dB hỏng nữa, và đó là phần mà bộ lọc tốt không cứu được.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · một chip trong bảng của slide, blocker −10 dBm ở 12.5 MHz</p>
+        <p class="eq">độ nhạy đo được khi có blocker  =  −65.3 dBm      (xG24)<br>tạp âm gốc  −102 dBm  ≪  −65.3  →  coi như toàn bộ là phần rò:  P_blocker − R = −65.3<br>R  =  −10 − (−65.3)  =  55.3 dB</p>
+        <p>Nghĩa là bộ lọc cộng với chân phổ của chính tín hiệu Wi-Fi chắn mất 55.3 dB ở khoảng cách 12.5 MHz. Con số R này gộp cả hai: bộ lọc của máy thu và độ lan chân phổ của máy phát Wi-Fi; phép đo kiểu này không tách được hai thứ. Phần "Đọc bảng đo" tiếp theo dùng R để biết chip nào đang bị rò, chip nào đang bị nén.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Phân loại sự cố theo cách chữa: nếu độ nhạy tụt đúng <b>1 dB cho mỗi dB blocker</b>, bạn đang ở vùng rò, và chọn lọc tốt hơn (kênh xa hơn, bộ lọc ngoài) sẽ giúp. Nếu tụt <b>nhiều hơn</b>, bạn đang ở vùng nén: khi đó phải hạ mức blocker ở cổng thu (xa nguồn hơn, cách ly ăng-ten, thêm bộ lọc ngoài), hoặc đổi chip có tuyến tính tốt hơn.</p>
+      </div>
+
+      <h2 id="bang-blocking">Đọc bảng đo blocking</h2>
+      <p>Slide đặt một phép thử cụ thể: phát một tín hiệu Wi-Fi 802.11n kênh 6 rộng 20 MHz làm blocker, quét một máy thu 802.15.4 qua cả băng, và ghi độ nhạy của máy thu ở hai khoảng cách tính từ tâm Wi-Fi: 12.5 MHz (sát mép) và 22.5 MHz (xa hơn). Làm hai lần, với blocker −10 dBm và −40 dBm. Cột <b>Delta</b> là mức tín hiệu cần tăng thêm so với chip chuẩn (xG24) để nhận gói tương tự. Dữ liệu (dBm):</p>
+      <table class="num big">
+        <thead><tr><th rowspan="2">Chip</th><th colspan="2" class="r">blocker −10 dBm, 12.5 MHz</th><th colspan="2" class="r">22.5 MHz</th><th colspan="2" class="r">blocker −40 dBm, 12.5 MHz</th><th colspan="2" class="r">22.5 MHz</th></tr>
+        <tr><th class="r">độ nhạy</th><th class="r">delta</th><th class="r">độ nhạy</th><th class="r">delta</th><th class="r">độ nhạy</th><th class="r">delta</th><th class="r">độ nhạy</th><th class="r">delta</th></tr></thead>
+        <tbody>
+          <tr><td>xG24</td><td class="r">−65.3</td><td class="r">0</td><td class="r">−73.6</td><td class="r">0</td><td class="r">−94.9</td><td class="r">0</td><td class="r">−100.1</td><td class="r">0</td></tr>
+          <tr><td>xG301</td><td class="r">−61.2</td><td class="r">4.1</td><td class="r">−72.1</td><td class="r">1.5</td><td class="r">−91.1</td><td class="r">3.8</td><td class="r">−99.3</td><td class="r">0.8</td></tr>
+          <tr><td>Competitor A</td><td class="r">−33.7</td><td class="r">31.6</td><td class="r">−45.6</td><td class="r">28.0</td><td class="r">−89.5</td><td class="r">5.4</td><td class="r">−97.1</td><td class="r">3.0</td></tr>
+          <tr><td>Competitor B</td><td class="r">−49.2</td><td class="r">16.1</td><td class="r">−66.3</td><td class="r">7.3</td><td class="r">−86.1</td><td class="r">8.8</td><td class="r">−95.7</td><td class="r">4.4</td></tr>
+        </tbody>
+      </table>
+      <p>Đọc theo cột, ở hàng −40 dBm bốn chip chỉ hơn kém nhau tối đa 8.8 dB. Ở hàng −10 dBm chênh lệch nở ra tới 31.6 dB. Nhưng con số đáng chú ý hơn là một con số slide không ghi: <b>khi blocker tăng 30 dB (từ −40 lên −10), độ nhạy của mỗi chip xấu đi bao nhiêu?</b> Nếu chỉ là rò qua bộ lọc thì xấu đi đúng 30 dB. Từ bảng tính ra (ở 12.5 MHz): xG24 xấu đi 29.6 dB, xG301 29.9 dB, Competitor B 36.9 dB, Competitor A tới 55.8 dB.</p>
+
+      <section class="sim" id="sim-table" aria-label="Mô phỏng đọc bảng blocking: độ nhạy theo mức blocker cho bốn chip, so với đường tuyến tính 1 dB mỗi dB">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Khoảng lệch tần
+              <select name="col">
+                <option value="0" selected>12.5 MHz từ tâm Wi-Fi</option>
+                <option value="1">22.5 MHz từ tâm Wi-Fi</option>
+              </select>
+            </label>
+            <label>Hệ số N <input name="n" type="range" min="2" max="4" step="0.1" value="4"><output data-out="n"></output></label>
+          </div>
+        </div>
+        <canvas class="h-xl" role="img" aria-label="Độ nhạy theo mức blocker −40 và −10 dBm cho bốn chip; đường nét đứt cho thấy nơi mỗi chip sẽ ở nếu chỉ bị rò qua bộ lọc, 1 dB độ nhạy cho mỗi dB blocker"></canvas>
+        <div class="legend">
+          <span style="--c: var(--green)">xG24</span>
+          <span style="--c: var(--indigo)">xG301</span>
+          <span style="--c: var(--accent)">Competitor A</span>
+          <span style="--c: var(--ochre)">Competitor B</span>
+          <span style="--c: var(--faint)">nét đứt: nếu chỉ rò (tuyến tính)</span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+        <div class="scroll"><table class="grid" data-out="tbl"></table></div>
+      </section>
+      <p class="try"><b>Thử:</b> với 12.5 MHz, hai đường của xG24 và xG301 song song với đường nét đứt: chúng chỉ bị rò. Competitor A rơi thẳng xuống, vượt đường nét đứt 26 dB: đó là nén. Competitor B vượt 7.0 dB ở 12.5 MHz nhưng chỉ 0.6 dB ở 22.5 MHz: nén nhẹ khi blocker sát, và chạy tuyến tính khi xa hơn. Kéo N: cột cuối cho thấy delta 31.6 dB của Competitor A ở −10 dBm, N = 4 chỉ còn 16% tầm xa của xG24.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · tách rò khỏi nén bằng hai hàng của bảng (12.5 MHz)</p>
+        <p class="eq">Competitor A, hàng −40 dBm:  độ nhạy −89.5 dBm; trừ phần tạp âm gốc −102 dBm (chỉ ~0.25 dB) thì phần rò là −89.75 dBm<br>  R  =  −40 − (−89.75)  =  49.8 dB<br>  dự đoán ở −10 dBm nếu chỉ rò:  −10 − 49.75  =  −59.8 dBm<br>  đo được:  −33.7 dBm  →  nén thêm  −33.7 − (−59.8)  =  26.1 dB<br>xG24:  dự đoán −65.8, đo −65.3  →  chênh 0.5 dB, không nén</p>
+        <p>Mô hình rò dùng độ nhạy gốc −102 dBm cho mọi chip (slide không công bố độ nhạy gốc từng chip trong điều kiện thử này), nên sai số cỡ 0.5 dB là bình thường; kết luận (A nén mạnh, B nén vừa, xG không nén ở mức −10 dBm) không phụ thuộc vào giả định đó. Kết luận này là phân tích của tôi trên số của slide, không phải điều slide nói.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Khi đọc một bảng blocking, đừng chỉ nhìn hàng có đẹp nhất cho chip bạn thích. Hãy hỏi: <b>(1)</b> blocker mô phỏng điều gì (hàng −40 dBm là cả nhà; −10 dBm là Wi-Fi sát nách); <b>(2)</b> hai hàng có song song không, hay một chip rơi dốc ở hàng mạnh; <b>(3)</b> tín hiệu blocker là điều chế (như Wi-Fi thật) hay sóng mang thuần; <b>(4)</b> đo trong điều kiện nào. Số trên đều của nhà sản xuất; muốn chắc, tự đo lại bằng bộ đo của bạn.</p>
+      </div>
+
+      <h2 id="ngoai-doi">Blocker mạnh cỡ nào ngoài đời</h2>
+      <p>Hai hàng của bảng không phải hai con số ngẫu nhiên. Ngoài đời, blocker mạnh hay yếu phụ thuộc vào <b>khoảng cách tới nguồn Wi-Fi</b>, và sóng Wi-Fi đi trong khoảng ngắn thì gần với không gian tự do. Router phát +20 dBm; mất <code>40.2 + 20·log₁₀(d)</code> dB tới thiết bị, nên blocker tại thiết bị là <code>20 − 40.2 − 20·log₁₀(d)</code> dBm. Người nói trong buổi talk cầm máy phân tích phổ đi quanh nhà và thấy đa số thiết bị ở mức −40 dBm; chỗ để router và hub sát nhau trên một cái tủ thì tới −20 dBm.</p>
+
+      <section class="sim" id="sim-field" aria-label="Mô phỏng blocker ngoài đời: khoảng cách tới router hoặc độ cách ly giữa hai radio cùng thiết bị">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Nguồn Wi-Fi
+              <select name="src">
+                <option value="router" selected>router ở xa</option>
+                <option value="board">radio Wi-Fi cùng thiết bị</option>
+              </select>
+            </label>
+            <label>Công suất Wi-Fi <input name="pw" type="range" min="10" max="30" step="1" value="20"><output data-out="pw"></output></label>
+          </div>
+          <div class="ctl-group">
+            <label>Khoảng cách tới router <input name="dw" type="range" min="0.3" max="20" step="0.1" value="1"><output data-out="dw"></output></label>
+            <label>Cách ly giữa hai ăng-ten <input name="iso" type="range" min="0" max="40" step="1" value="20"><output data-out="iso"></output></label>
+          </div>
+        </div>
+        <canvas class="h-md" role="img" aria-label="Thang mức blocker từ −60 đến +10 dBm với hai mốc −40 và −10 dBm của bảng đo và dấu mức blocker hiện tại"></canvas>
+        <div class="sim-stats">
+          <span>Blocker tại thiết bị: <b data-out="pb">–</b></span>
+          <span>Gần hàng nào của bảng: <b data-out="row">–</b></span>
+          <span>Độ nhạy hiệu dụng (chip như xG24, 22.5 MHz): <b data-out="seff">–</b></span>
+          <span>Mất so với gốc: <b data-out="loss">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> router cách 1 m: −20.2 dBm; cách 9 m: −39.3 dBm, tức bảng −40 dBm là "cả ngôi nhà", và router ở 0.3 m cho −9.7 dBm, tức bảng −10 dBm là "Wi-Fi để sát bên". Đổi sang <b>radio Wi-Fi cùng thiết bị</b>: ăng-ten Wi-Fi và ăng-ten BLE trên cùng một chiếc đồng hồ chỉ cách ly cỡ 20 dB, nghĩa là blocker 0 dBm, mạnh hơn cả hàng −10 dBm của bảng.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · hai hàng của bảng tương ứng với bao xa</p>
+        <p class="eq">0.3 m  (1 ft):   20 − 40.2 − 20·log₁₀(0.3)  =  20 − 40.2 + 10.5  =  −9.7 dBm   (hàng −10 dBm)<br>9 m    (30 ft):  20 − 40.2 − 19.1                  =  −39.3 dBm  (hàng −40 dBm)<br>cùng bo, cách ly 20 dB:   20 − 20  =  0 dBm</p>
+        <p>Khớp với lời trong buổi nói: −10 dBm là Wi-Fi cách 1 đến 2 feet (đồng hồ, máy đo đường huyết cạnh điện thoại), −40 dBm là 20 đến 40 feet (6 đến 12 m). Sự đối chiếu này tôi tính lại bằng không gian tự do; vách ngăn thêm dB nên khoảng cách thực để có cùng mức thường gần hơn.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Chọn hàng của bảng theo sản phẩm. Đèn, công tắc, cảm biến trong nhà: hàng −40 dBm là điều kiện bình thường, và hàng −10 dBm là trường hợp xấu có thật (ở sát router). Thiết bị đeo hay thiết bị có hai radio trong cùng một vỏ: blocker có thể mạnh hơn hàng −10 dBm, vì vậy blocking của chip và <b>cách ly giữa các ăng-ten</b> trở thành vấn đề thiết kế chính.</p>
+      </div>
+
+      <h2 id="giao-thuc">Khi radio thua, giao thức gánh, và khách hàng thấy gì</h2>
+      <p>Khi tai nghe kém trong quán ồn, người ta không bỏ cuộc, họ lặp lại: "Gì cơ? Nói lại đi". Giao thức vô tuyến có sẵn cả một bộ dụng cụ cho việc này: kiểm tra kênh có trống không trước khi nói (CCA), chờ ngẫu nhiên rồi thử lại, chờ ACK rồi gửi lại gói (MAC retries), thử lại ở tầng ứng dụng, đổi sang kênh khác (frequency agility), nhảy tần (frequency hopping). Chúng hoạt động, nhưng đều tốn <b>thời gian</b> và <b>năng lượng</b>, và khách hàng nhìn thấy cả hai: nút bấm chậm, cập nhật OTA "mãi không xong", pin tụt nhanh. Người nói trong buổi talk có nhấn mạnh rằng mục tiêu của thiết kế radio là làm cho thiết bị chạy tốt như thể không có blocker, để khỏi phải dùng những thứ này.</p>
+
+      <section class="sim" id="sim-retry" aria-label="Mô phỏng giá của việc gửi lại: thời gian cập nhật OTA theo tỉ lệ gói lỗi">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Tỉ lệ gói lỗi (PER) <input name="per" type="range" min="0" max="90" step="1" value="30"><output data-out="per"></output></label>
+            <label>Số lần thử lại tối đa <input name="ret" type="range" min="0" max="7" step="1" value="3"><output data-out="ret"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Thời gian cập nhật OTA theo PER từ 0 đến 90 phần trăm, tăng ngày càng nhanh, có điểm đang xét"></canvas>
+        <div class="sim-stats">
+          <span>Lần phát trung bình mỗi gói: <b data-out="att">–</b></span>
+          <span>Thời gian OTA: <b data-out="ota">–</b></span>
+          <span>Gói bị bỏ sau mọi lần thử lại: <b data-out="drop">–</b></span>
+          <span>Năng lượng phát gấp: <b data-out="en">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> mô hình: ảnh 256 KiB chia thành 2622 gói 100 byte, mỗi lần phát tốn 6 ms (gói, chờ ACK, chờ ngẫu nhiên); các gói không giao được sẽ do tầng ứng dụng gửi lại. Ở PER 0: 15.7 s. PER 50%: 31.5 s, gấp đôi. PER 80%: 78.7 s. Giảm số lần thử lại xuống 0 ở PER 30%: cứ 100 gói thì 30 bị bỏ ở tầng MAC, tầng ứng dụng phải gửi lại.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · số lần phát trung bình và thời gian OTA</p>
+        <p class="eq">PER p,  thử lại không giới hạn:  số lần phát trung bình = 1 / (1 − p)<br>p = 30%:  1 / 0.70 = 1.43    OTA = 2622 · 6 ms · 1.43 = 22.5 s<br>p = 50%:  1 / 0.50 = 2.00    OTA = 31.5 s<br>p = 70%:  1 / 0.30 = 3.33    OTA = 52.4 s<br>sau 3 lần thử lại, gói bị bỏ với xác suất  p⁴:  p = 50% → 6.25%,   p = 70% → 24%</p>
+        <p>Nhân đôi thời gian ở PER 50% cũng là nhân đôi năng lượng phát. Số 6 ms mỗi lần thử và các tham số còn lại là giả định minh hoạ: tỉ số mới là điều cần nhìn, không phải số giây.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Đổi PER thành thời gian và pin để nói chuyện với người không làm RF: "PER 50% nghĩa là cập nhật phần mềm chậm gấp đôi và tốn gấp đôi pin phát". Và khi sản phẩm có lỗi ngoài hiện trường, nhìn <b>số lần gửi lại</b> trước tiên: nó thường lộ ra vấn đề RF trước khi người dùng than phiền.</p>
+      </div>
+
+      <h2 id="multipath">Multipath: đứng yên mà tín hiệu vẫn nhảy</h2>
+      <p>Đứng trong phòng tắm và hát: ở vài chỗ giọng bạn bỗng to hẳn, ở vài chỗ nhỏ xíu; bước sang bên một gang tay là khác hẳn. Tiếng đến tai bạn bằng nhiều đường, thẳng và dội tường, và các sóng cộng với nhau: chỗ nào cùng nhịp thì to lên, chỗ nào ngược nhịp thì triệt tiêu nhau. Sóng vô tuyến 2.4 GHz cũng vậy, chỉ khác là bước sóng 12.3 cm: nhích 3 đến 6 cm là đủ để đi từ một đỉnh xuống một hố.</p>
+      <p>Hố đó không phải lỗi thiết bị; nó là vật lý của sóng. Với hai đường (thẳng và một phản xạ biên độ r, tính so với tia thẳng) công suất thu là <code>1 + r² + 2r·cos(Δφ)</code>: lớn nhất <code>(1+r)²</code>, nhỏ nhất <code>(1−r)²</code>. Phản xạ càng mạnh thì hố càng sâu, và <b>khoảng cách giữa hai hố liên tiếp là λ/2 ≈ 6.1 cm</b>. Khi có nhiều đường phản xạ trong nhà, hố xuất hiện lộn xộn mà có thống kê rất rõ: <b>fading Rayleigh</b>.</p>
+
+      <section class="sim" id="sim-multi" aria-label="Mô phỏng multipath: công suất thu dọc một đoạn 80 cm khi cộng tia thẳng với các tia phản xạ">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Số đường phản xạ <input name="m" type="range" min="0" max="10" step="1" value="1"><output data-out="m"></output></label>
+            <label>Độ mạnh phản xạ (so với tia thẳng) <input name="r" type="range" min="0" max="2" step="0.05" value="0.9"><output data-out="r"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Công suất thu theo dB so với chỉ có tia thẳng, dọc theo 80 centimet; có các hố sâu và đỉnh, đường nét đứt là công suất trung bình"></canvas>
+        <div class="sim-stats">
+          <span>Đỉnh: <b data-out="max">–</b></span>
+          <span>Hố sâu nhất: <b data-out="min">–</b></span>
+          <span>Dưới trung bình 10 dB: <b data-out="p10">–</b></span>
+          <span>Dưới trung bình 20 dB: <b data-out="p20">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> mặc định (một phản xạ, r = 0.9) cho sóng đứng: đỉnh +5.6 dB, hố sâu −20 dB, hai hố cách nhau đúng 6.1 cm. Đưa r về 0.3: hố nông lại, chỉ còn −3.1 dB. Quay r về 0.9 rồi tăng số đường lên 10 và r lên 2: các đỉnh và hố trở nên lộn xộn, và thống kê tính trên 3 m dọc đường đi tiến gần Rayleigh lý thuyết (dưới trung bình 10 dB: 9.5% vị trí, dưới 20 dB: 1%); mô phỏng này cho 10.6% và 1.8%.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · hai tia, và vì sao ngân sách phải chừa biên</p>
+        <p class="eq">phản xạ  r = 0.9:   đỉnh (1 + 0.9)² = 3.61 → +5.6 dB;   hố (1 − 0.9)² = 0.01 → −20.0 dB<br>λ = 3·10⁸ / 2.44·10⁹ = 12.3 cm;  hai hố cách nhau λ/2 = 6.1 cm<br>Rayleigh: xác suất công suất &lt; x · trung bình  =  1 − e<sup>−x</sup><br>   10% vị trí dưới −9.8 dB     1% dưới −20.0 dB     0.1% dưới −30.0 dB</p>
+        <p>Dòng cuối là cơ sở của "fade margin": để 99% vị trí vẫn nghe được trong môi trường nhiều phản xạ, cần chừa khoảng 20 dB dự phòng; 99.9% thì 30 dB. Con số 30 dB cũng chính là "fade sâu tới 30 dB" mà slide nhắc.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Khi một thiết bị "lúc được lúc không" dù đứng yên, hãy nghi multipath trước khi nghi chip: nhích thiết bị hay ăng-ten vài cm, hay người đi qua, đủ làm tín hiệu nhảy hàng chục dB. Trong ngân sách liên kết (mục 19) luôn trừ một khoản <b>fade margin</b> theo độ tin cậy cần có: 10 dB cho 90%, 20 dB cho 99%.</p>
+      </div>
+
+      <h2 id="hai-tai">Hai tai tốt hơn một: antenna diversity</h2>
+      <p>Hai tai của bạn cách nhau cỡ vài phân. Trong căn phòng đầy tiếng vọng, khi tai trái rơi vào một hố âm thì tai phải thường không, nên cả hai tai gộp lại hiếm khi cùng mất tiếng. Antenna diversity làm đúng việc đó với sóng vô tuyến: hai ăng-ten đặt cách nhau <b>ít nhất một phần tư bước sóng</b>, nên hố của ăng-ten này thường rơi ở chỗ khác với hố của ăng-ten kia; radio <b>chọn ăng-ten tốt hơn</b> cho mỗi gói, và các hố được cắt bớt.</p>
+
+      <section class="sim" id="sim-div" aria-label="Mô phỏng antenna diversity: mức thu của hai ăng-ten theo thời gian và mức thu sau khi chọn ăng-ten tốt hơn">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Khoảng cách hai ăng-ten <input name="d" type="range" min="0" max="25" step="0.5" value="3"><output data-out="d"></output></label>
+            <label>Biên so với ngưỡng thu <input name="mrg" type="range" min="0" max="30" step="1" value="10"><output data-out="mrg"></output></label>
+          </div>
+        </div>
+        <canvas class="h-xl" role="img" aria-label="Mức thu của ăng-ten 1, ăng-ten 2 và mức sau khi chọn ăng-ten tốt hơn theo thời gian, cùng đường ngưỡng tối thiểu để thu được; phần đáy dưới ngưỡng là gói rớt"></canvas>
+        <div class="legend">
+          <span style="--c: var(--indigo)">ăng-ten 1</span>
+          <span style="--c: var(--ochre)">ăng-ten 2</span>
+          <span style="--c: var(--accent)">sau khi chọn ăng-ten tốt hơn</span>
+          <span style="--c: var(--faint)">ngưỡng tối thiểu để thu được</span>
+        </div>
+        <div class="sim-stats">
+          <span>Tương quan hai ăng-ten ρ²: <b data-out="rho">–</b></span>
+          <span>Thời gian dưới ngưỡng, một ăng-ten: <b data-out="o1">–</b></span>
+          <span>Sau khi chọn: <b data-out="ob">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> mặc định (3 cm, gần λ/4, biên 10 dB): ăng-ten 1 một mình dưới ngưỡng 9.6% thời gian, còn sau khi chọn chỉ còn 1.2%. Kéo khoảng cách về 0: hai ăng-ten thành một, đường đỏ trùng đường xanh, vẫn 9.6%. Kéo lên 12 cm (cỡ λ): 1.0%, gần mức lý thuyết cho hai ăng-ten độc lập (0.91%). Hạ biên xuống 5 dB: một ăng-ten rớt 27.7% thời gian, hai ăng-ten còn 9.3%. Thống kê tính trên 20 000 mẫu, đồ thị chỉ hiện 300 mẫu đầu.</p>
+      <p>Mô hình: hai kênh fading Rayleigh biến đổi chậm theo thời gian, tương quan giữa hai ăng-ten theo mô hình Jakes (tán xạ đồng đều quanh ăng-ten): hệ số tương quan phức bằng <code>J₀(2π·d/λ)</code>, tức ρ² = 0.22 ở d = λ/4 (3.07 cm) và gần 0.05 ở d = λ.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · lợi bao nhiêu dB, và con số "6 dB" của slide nghĩa là gì</p>
+        <p class="eq">hai ăng-ten độc lập, chọn tốt nhất:  P(cả hai dưới x) = (1 − e<sup>−x</sup>)²<br>mức mà 10% thời gian rơi xuống dưới:  một ăng-ten −9.77 dB   hai ăng-ten −4.20 dB   →  lợi 5.57 dB<br>mức 1%:   −19.98 dB → −9.77 dB   →  lợi 10.20 dB<br>mức 0.1%:   −30.00 dB → −14.93 dB   →  lợi 15.07 dB<br>công suất trung bình của ăng-ten được chọn:  tăng 10·log₁₀(1.5) = 1.76 dB</p>
+        <table class="num">
+          <thead><tr><th>Cách nhau (λ)</th><th class="r">ρ²</th><th class="r">TB</th><th class="r">lợi ở 50%</th><th class="r">10%</th><th class="r">1%</th><th class="r">0.1%</th></tr></thead>
+          <tbody>
+            <tr><td>0 (một ăng-ten)</td><td class="r">1.000</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">0.00</td><td class="r">0.00</td></tr>
+            <tr><td>0.05 (0.6 cm)</td><td class="r">0.952</td><td class="r">0.45</td><td class="r">0.61</td><td class="r">1.58</td><td class="r">4.42</td><td class="r">8.95</td></tr>
+            <tr><td>0.10 (1.2 cm)</td><td class="r">0.817</td><td class="r">0.85</td><td class="r">1.16</td><td class="r">2.89</td><td class="r">6.77</td><td class="r">11.14</td></tr>
+            <tr><td>0.25 (3.1 cm)</td><td class="r">0.223</td><td class="r">1.58</td><td class="r">2.20</td><td class="r">5.14</td><td class="r">9.54</td><td class="r">14.26</td></tr>
+            <tr><td>0.50 (6.1 cm)</td><td class="r">0.093</td><td class="r">1.69</td><td class="r">2.39</td><td class="r">5.45</td><td class="r">10.20</td><td class="r">14.96</td></tr>
+            <tr><td>1.00 (12.3 cm)</td><td class="r">0.049</td><td class="r">1.73</td><td class="r">2.43</td><td class="r">5.48</td><td class="r">10.05</td><td class="r">14.94</td></tr>
+          </tbody>
+        </table>
+        <p>Slide nói "cải thiện khoảng 6 dB trung bình" và "fade sâu có thể tới 30 dB". Hai câu cùng đúng nếu hiểu như sau (đây là cách đọc của tôi; slide không định nghĩa "trung bình"): công suất trung bình chỉ tăng 1.6 đến 1.8 dB, nhưng <b>ở đuôi</b> của phân bố, nơi gói rớt, lợi lớn: 5.1 đến 5.6 dB ở mức 10%, khoảng 10 dB ở mức 1%. Diversity không làm sóng mạnh hơn; nó cắt đi những cái hố. Và khoảng cách λ/4 đã cho hơn 90% lợi tối đa (5.14 so với 5.5 dB ở mức 10%): vì sao slide yêu cầu "ít nhất λ/4".</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Tính diversity vào ngân sách như một cách <b>giảm fade margin</b>, không phải một cách tăng công suất thu: ở độ tin cậy 99%, hai ăng-ten độc lập cho phép giảm biên dự phòng từ 20 dB xuống khoảng 10 dB. Một điểm thưởng: thiết bị phát bằng đúng ăng-ten vừa chọn để thu, nên phía bên kia cũng được hưởng (kênh vô tuyến có tính thuận nghịch).</p>
+      </div>
+
+      <h2 id="preamble">Chọn ăng-ten trong 128 µs</h2>
+      <p>Chọn tai nào nghe rõ hơn cần thời gian để nghe thử cả hai. Một gói 802.15.4 bắt đầu bằng <b>preamble</b>: 4 byte toàn số 0 chỉ để máy thu làm quen (khóa thời gian và tần số), chưa mang dữ liệu. Mỗi ký hiệu 802.15.4 dài 16 µs và một byte là hai ký hiệu, nên 4 byte là 8 ký hiệu, tức <b>128 µs</b>. Trong khoảng đó, radio phải nhận ra có gói, đo ăng-ten này, đổi sang ăng-ten kia, đo, so sánh, rồi chọn, mà vẫn còn đủ thời gian để khóa tần số và thời gian trên ăng-ten đã chọn.</p>
+      <p>Cách hoạt động theo slide: khi rảnh, radio liên tục đổi qua lại giữa hai ăng-ten và nghe. Khi một ăng-ten bắt được preamble, radio đo chất lượng tín hiệu (<b>RSSI</b>: nhanh, chịu được ước lượng thô; hoặc <b>tương quan</b> với mẫu preamble: chậm hơn, ổn định hơn khi nhiễu), đổi sang ăng-ten còn lại, đo lần nữa, so hai kết quả, rồi ở lại ăng-ten tốt hơn cho phần còn lại của gói; ACK gửi lại cũng dùng ăng-ten đó. Phiên bản đơn giản hơn là <b>select first good</b>: chọn ngay ăng-ten đầu tiên bắt được preamble hợp lệ, dễ làm nhưng có thể chọn nhầm cái chỉ vừa đủ. Bản kia là <b>select best</b>: cần đủ thời gian để xem cả hai.</p>
+
+      <section class="sim" id="sim-pre" aria-label="Mô phỏng chọn ăng-ten trong preamble: đường thời gian của hai ăng-ten luân phiên, lúc phát hiện, lúc quyết định và thời gian còn lại để khóa tần số">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Giao thức">
+            <label>Preamble
+              <select name="pre">
+                <option value="128" selected>802.15.4: 4 byte = 128 µs</option>
+                <option value="8">BLE LE 1M: 1 byte = 8 µs</option>
+                <option value="400">giao thức riêng, ví dụ 400 µs</option>
+              </select>
+            </label>
+            <label>Lúc preamble tới <input name="off" type="range" min="0" max="40" step="1" value="10"><output data-out="off"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Phần cứng">
+            <label>Đổi ăng-ten và ổn định <input name="settle" type="range" min="1" max="20" step="1" value="4"><output data-out="settle"></output></label>
+            <label>Nghe mỗi ăng-ten <input name="listen" type="range" min="4" max="60" step="1" value="24"><output data-out="listen"></output></label>
+            <label>Cần để khóa tần số <input name="lock" type="range" min="8" max="64" step="1" value="32"><output data-out="lock"></output></label>
+          </div>
+        </div>
+        <canvas class="h-pre" role="img" aria-label="Đường thời gian: hai hàng ăng-ten 0 và 1 luân phiên, thanh preamble bắt đầu ở thời điểm đã chọn, các vạch phát hiện, quyết định chọn tốt nhất và quyết định chọn cái đầu tiên"></canvas>
+        <div class="legend">
+          <span style="--c: var(--accent)">preamble</span>
+          <span style="--c: var(--indigo)">đang nghe ăng-ten 0</span>
+          <span style="--c: var(--ochre)">đang nghe ăng-ten 1</span>
+          <span style="--c: var(--green)">còn lại để khóa tần số</span>
+        </div>
+        <div class="sim-stats">
+          <span>Một lượt nghe: <b data-out="dwell">–</b></span>
+          <span>Quyết định muộn nhất (chọn tốt nhất): <b data-out="worstBest">–</b></span>
+          <span>Cần tối thiểu: <b data-out="need">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> mặc định (preamble 128 µs, mỗi ăng-ten 4 + 24 = 28 µs): quyết định muộn nhất 80 µs sau khi preamble bắt đầu, còn 48 µs để khóa; đủ cho <b>select best</b> trong mọi trường hợp. Kéo <b>Nghe mỗi ăng-ten</b> lên 32: một lượt 36 µs, select best cần 3·36 + 32 = 140 µs, vượt preamble 128 µs, và radio phải lùi về <b>select first good</b> (chỉ còn 2·36 − 4 + 32 = 100 µs). Đổi preamble sang BLE 8 µs: đến cả một lượt nghe cũng không lọt, không có diversity nào cả.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · thời gian muộn nhất để quyết định, và vì sao BLE không có</p>
+        <p class="eq">preamble 802.15.4:  4 byte · 2 ký hiệu · 16 µs = 128 µs        preamble BLE LE 1M:  1 byte · 8 bit · 1 µs = 8 µs   (nhỏ hơn 16 lần)<br>một lượt nghe D = đổi (4) + nghe (24) = 28 µs<br>select best, tệ nhất:  chờ hết một lượt cho preamble đã có mặt, rồi nghe ăng-ten này, rồi ăng-ten kia:  3·D − đổi = 80 µs<br>cộng thời gian đổi lại + khóa tần số:  80 + 4 + 32 = 116 µs  ≤ 128 µs   ✓  (dư 12 µs)</p>
+        <p>Các con số 4 µs đổi, 24 µs nghe, 32 µs khóa là giả định minh hoạ, không phải của chip nào; công thức mới là thứ cần nắm: <code>3·D + khóa ≤ độ dài preamble</code> thì select best luôn kịp. Slide nói thêm hai điều khớp với bức tranh này: nghe mỗi ăng-ten ngắn hơn thì <b>độ nhạy gốc giảm chút ít</b> (ít thời gian hơn để khóa), và BLE với preamble 1 đến 2 byte thường không hỗ trợ.</p>
+      </div>
+
+      <h3>Phân cực và vùng null của ăng-ten</h3>
+      <p>Một lợi ích nữa của hai ăng-ten, theo slide: đặt chúng lệch nhau 90°. Mỗi ăng-ten (như dây đơn cực hay dipole) không phát đều mọi hướng; hình vẽ của nó giống chiếc bánh vòng, có <b>null</b> dọc theo trục của dây: sóng tới đúng hướng đó gần như không vào được ăng-ten. Hai ăng-ten vuông góc có hai hướng null khác nhau, nên một cái luôn "nhìn thấy" sóng mà cái kia bỏ lỡ.</p>
+
+      <section class="sim" id="sim-pol" aria-label="Mô phỏng giản đồ ăng-ten dipole: hai ăng-ten vuông góc bù null cho nhau">
+        <div class="sim-controls">
+          <div class="ctl-group">
+            <label>Hướng sóng tới <input name="th" type="range" min="0" max="180" step="1" value="0"><output data-out="th"></output></label>
+            <label class="check"><input name="two" type="checkbox"> thêm ăng-ten thứ hai, lệch 90°</label>
+          </div>
+        </div>
+        <canvas class="h-xl" role="img" aria-label="Giản đồ công suất của hai ăng-ten dipole vuông góc trong mặt phẳng chứa trục của chúng; mỗi ăng-ten có hai cánh và một hướng null dọc theo trục; mũi tên cho hướng sóng tới"></canvas>
+        <div class="legend">
+          <span style="--c: var(--indigo)">ăng-ten 1 (trục thẳng đứng)</span>
+          <span style="--c: var(--ochre)">ăng-ten 2 (trục nằm ngang)</span>
+          <span style="--c: var(--accent)">hướng sóng tới</span>
+        </div>
+        <div class="sim-stats">
+          <span>Ăng-ten 1: <b data-out="g1">–</b></span>
+          <span>Ăng-ten 2: <b data-out="g2">–</b></span>
+          <span>Tốt nhất: <b data-out="gb">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> chỉ một ăng-ten, kéo hướng sóng về 0° (dọc trục): công suất rơi xuống gần như không. Bật ăng-ten thứ hai: ở 0° ăng-ten 2 nhìn thẳng vào sóng và cho 0 dB. Quét cả 180°: trường hợp xấu nhất của hai ăng-ten là 45°, hai ăng-ten cùng nhận một nửa công suất, thấp hơn đỉnh 3.01 dB, thay cho một cái null sâu vô hạn.</p>
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · hướng xấu nhất của hai ăng-ten vuông góc</p>
+        <p class="eq">dipole:  công suất ∝ sin²θ  (θ tính từ trục);  ăng-ten kia:  cos²θ<br>chọn cái tốt hơn:  max(sin²θ, cos²θ)  ≥  0.5  (tại θ = 45°)  →  10·log₁₀(0.5) = −3.01 dB</p>
+        <p>Trong nhà, phản xạ làm sóng tới từ mọi hướng nên vấn đề phân cực ít nghiêm trọng hơn (slide cũng nói vậy); lợi ích này lớn hơn ở nơi có đường thẳng rõ.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Khi một chip ghi "hỗ trợ antenna diversity", hỏi bốn điều: <b>select first hay select best</b>; <b>RSSI hay tương quan</b>; <b>preamble của giao thức bạn dùng dài bao nhiêu</b> (4 byte của 802.15.4 là mức thấp nhất còn làm được, BLE thì không); và <b>thời gian đổi cùng thời gian nghe mỗi ăng-ten</b>, để kiểm lại bằng <code>3·D + khóa ≤ preamble</code>. Giao thức riêng thì preamble dài hơn là cách "mua" diversity, nhưng đổi lại gói dài hơn, tốn thêm thời gian phát và pin.</p>
+      </div>
+
+      <h2 id="gia-diversity">Giá của diversity và khi nào "đủ tốt" bằng cách khác</h2>
+      <p>Nếu diversity miễn phí thì ai cũng dùng. Nó có giá ở mọi tầng: <b>mạch</b>, thêm ăng-ten thứ hai cùng linh kiện phối hợp, và một công tắc ăng-ten (có thể nằm trong chip hoặc rời ngoài, và công tắc rời tốn thêm <b>suy hao chèn</b>); <b>kích thước</b>, vì hai ăng-ten phải cách nhau ít nhất λ/4, tức 3.12 cm ở 2.4 GHz (1.23 inch) và 8.19 cm ở 915 MHz (3.22 inch); <b>độ nhạy gốc</b>, giảm chút ít vì mỗi ăng-ten được nghe ngắn hơn trong preamble; và <b>giao thức</b>, chỉ làm được với preamble đủ dài. Cái được: giảm hố fading, đáng giá nhất khi hố nhiều và sâu.</p>
+      <p>Mức độ "nhiều và sâu" đo bằng <b>hệ số Rice K</b>, tỉ số giữa công suất tia thẳng và công suất các tia phản xạ cộng lại. K nhỏ (không có tia thẳng, toàn phản xạ, như nhà máy kim loại): Rayleigh, hố sâu. K lớn (đường thẳng trội, như phòng thoáng): hố nông, ăng-ten thứ hai có ít việc để làm. Mô phỏng sau tính lợi ròng: lợi của việc cắt hố trừ đi hai khoản mất.</p>
+
+      <section class="sim" id="sim-net" aria-label="Mô phỏng lợi ròng của antenna diversity theo hệ số Rice, độ tin cậy và các khoản mất">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Môi trường">
+            <label>Hệ số Rice K
+              <select name="k">
+                <option value="-Infinity" selected>Rayleigh: toàn phản xạ</option>
+                <option value="0">K = 0 dB</option>
+                <option value="5">K = 5 dB</option>
+                <option value="10">K = 10 dB</option>
+                <option value="15">K = 15 dB: tia thẳng trội</option>
+              </select>
+            </label>
+            <label>Độ tin cậy
+              <select name="p">
+                <option value="0.1">90% (outage 10%)</option>
+                <option value="0.01" selected>99% (outage 1%)</option>
+              </select>
+            </label>
+            <label>Cách nhau
+              <select name="d">
+                <option value="0.1">0.1 λ (1.2 cm)</option>
+                <option value="0.25" selected>0.25 λ (3.1 cm)</option>
+                <option value="0.5">0.5 λ (6.1 cm)</option>
+              </select>
+            </label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Các khoản mất">
+            <label>Mất độ nhạy vì preamble ngắn <input name="lock" type="range" min="0" max="3" step="0.1" value="1"><output data-out="lock"></output></label>
+            <label>Suy hao chèn của công tắc <input name="ins" type="range" min="0" max="2" step="0.1" value="0.5"><output data-out="ins"></output></label>
+          </div>
+        </div>
+        <canvas class="h-lg" role="img" aria-label="Biểu đồ lợi ròng: cột một ăng-ten bằng 0 dB, cộng lợi do chọn ăng-ten, trừ mất độ nhạy, trừ suy hao công tắc, ra lợi ròng"></canvas>
+        <div class="sim-stats">
+          <span>Lợi do chọn ăng-ten: <b data-out="gain">–</b></span>
+          <span>Lợi ròng: <b data-out="net">–</b></span>
+          <span>Mức fade của một ăng-ten: <b data-out="lvl">–</b></span>
+        </div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> với Rayleigh, độ tin cậy 99%, cách λ/4, mất 1 dB và 0.5 dB: lợi 9.7 dB, ròng +8.2 dB: rất đáng làm. Đổi K lên 10 dB: lợi chỉ còn 2.2 dB, ròng +0.7 dB, vừa đủ hoà vốn. Với K = 15 dB, lợi 0.9 dB và ròng −0.6 dB: tốn tiền, tốn chỗ, mà còn tệ đi. Đó là lý do slide nói diversity "quan trọng ở thương mại và công nghiệp" (nhiều kim loại, nhiều phản xạ), ít gặp ở thiết bị gia dụng.</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · ba môi trường, độ tin cậy 99%</p>
+        <table class="num">
+          <thead><tr><th>Môi trường</th><th class="r">lợi 99%</th><th class="r">trừ 1 dB + 0.5 dB</th><th>kết luận</th></tr></thead>
+          <tbody>
+            <tr><td>Rayleigh (kho kim loại)</td><td class="r">9.7 dB</td><td class="r">+8.2 dB</td><td>đáng làm</td></tr>
+            <tr><td>K = 5 dB</td><td class="r">5.6 dB</td><td class="r">+4.1 dB</td><td>cân nhắc</td></tr>
+            <tr><td>K = 10 dB (phòng thoáng)</td><td class="r">2.2 dB</td><td class="r">+0.7 dB</td><td>khó biện minh</td></tr>
+            <tr><td>K = 15 dB</td><td class="r">0.9 dB</td><td class="r">−0.6 dB</td><td>không</td></tr>
+          </tbody>
+        </table>
+        <p>Số lợi lấy từ Monte Carlo 200 000 mẫu trong <code>check-rf.js</code> (cách λ/4, hai ăng-ten tương quan theo Jakes). Hai khoản mất (1 dB và 0.5 dB) là giả định minh hoạ.</p>
+      </div>
+      <p>Và nếu không dùng diversity, vẫn còn cách khác để "đủ tốt" mà slide liệt kê: <b>mesh</b> cho gói nhiều đường tới đích thay vì một liên kết duy nhất; <b>nhảy tần</b> (frequency hopping) biến hố ở một tần số thành chuyện chỉ xảy ra một lúc, nên BLE hầu như không cần diversity; <b>sửa lỗi tiến</b> (FEC) thêm bit dư để sửa một hai bit hỏng; và <b>thử lại</b> ở tầng giao thức. Mỗi thứ đều có giá riêng, nhưng nhiều khi rẻ hơn một ăng-ten thứ hai, và là lý do diversity ít xuất hiện ở đồ gia dụng.</p>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Trước khi đề nghị thêm ăng-ten thứ hai, đo: nơi triển khai nhiều phản xạ hay có đường thẳng rõ (K lớn hay nhỏ), giao thức có preamble đủ dài không (mục 17), và đã có mesh, hopping hay thử lại gánh chưa. Nếu K lớn hoặc đã có hopping, khoản đầu tư này thường không đáng.</p>
+      </div>
+
+      <h2 id="thuc-hanh">Đọc datasheet và lập ngân sách liên kết cho một sản phẩm thật</h2>
+      <p>Đến đây có đủ các mảnh để làm việc thật: một công tắc cần nói chuyện với hub qua hai bức tường, 15 m, và chủ nhà đang xem video trên Wi-Fi cách hub 3 m. Việc đầu tiên là đọc đúng các con số trong datasheet; việc thứ hai là cộng sổ, theo đúng thứ tự của đường truyền ở mục 1.</p>
+
+      <p><b>Đọc datasheet.</b> Mỗi chỉ số RF chỉ có nghĩa kèm điều kiện đo; bảng dưới là những câu hỏi nên có đáp án trước khi tin một con số.</p>
+      <table class="risk big">
+        <thead><tr><th>Chỉ số</th><th>Câu hỏi cần có đáp án</th><th>Bẫy thường gặp</th></tr></thead>
+        <tbody>
+          <tr><td>Sensitivity</td><td>Giao thức và tốc độ nào? PER bao nhiêu, gói dài bao nhiêu? Đo dẫn hay qua ăng-ten? Typical hay đảm bảo?</td><td>So −105 dBm của 802.15.4 với −97 dBm của BLE; so số "typical" của chip này với số "đảm bảo" của chip kia.</td></tr>
+          <tr><td>Output power</td><td>Đo ở cổng chip hay EIRP? Luật vùng bán có cho phép? Dòng khi phát ở mức đó?</td><td>"+20 dBm" chỉ ở một chế độ riêng; EIRP vượt giới hạn luật; bỏ qua dòng PA (mục 6).</td></tr>
+          <tr><td>Selectivity, channel rejection</td><td>Tín hiệu cần nghe cao hơn độ nhạy bao nhiêu? Nhiễu cùng loại điều chế? Kênh liền kề hay cách một kênh?</td><td>Hai chip đo ở mức tín hiệu khác nhau rồi so dB trực tiếp.</td></tr>
+          <tr><td>Blocking</td><td>Mức blocker bao nhiêu (−10 hay −40 dBm)? Cách tần số bao xa? Sóng mang thuần hay điều chế như Wi-Fi? Độ nhạy hiệu dụng hay mức dBm cho PER 1%?</td><td>Chỉ in hàng đẹp nhất; chỉ có số ở rất xa băng; không nói điều chế (mục 12).</td></tr>
+          <tr><td>Antenna diversity</td><td>Select first hay select best? RSSI hay tương quan? Công tắc trong chip hay ngoài? Giao thức nào có preamble đủ dài?</td><td>Cho rằng "có diversity" thì lợi 6 dB ở mọi nơi (mục 16, 18).</td></tr>
+          <tr><td>Dòng thu và phát</td><td>Ở điều kiện nào (điện áp, công suất, chế độ LNA)?</td><td>Dòng thu thấp nhất đi kèm độ nhạy kém hơn; hai con số không đo cùng một chế độ.</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>Lập ngân sách.</b> Đi từ trái sang phải trên đường truyền: công suất phát, độ lợi ăng-ten, suy hao đường truyền, tường, độ lợi ăng-ten thu, ra mức thu; rồi đi từ độ nhạy: độ nhạy gốc, cộng phần Wi-Fi rò vào, cộng biên dự phòng cho fading theo độ tin cậy cần có. Hiệu hai mức là <b>biên</b> còn lại.</p>
+
+      <section class="sim" id="sim-budget" aria-label="Bảng tính ngân sách liên kết cho công tắc và hub, có Wi-Fi, fading và antenna diversity">
+        <div class="sim-controls">
+          <div class="ctl-group" role="group" aria-label="Thiết bị">
+            <label>Công suất phát <input name="ptx" type="range" min="-10" max="20" step="1" value="10"><output data-out="ptx"></output></label>
+            <label>Độ lợi ăng-ten mỗi đầu <input name="g" type="range" min="-3" max="5" step="1" value="0"><output data-out="g"></output></label>
+            <label>Độ nhạy gốc <input name="s0" type="range" min="-110" max="-90" step="0.1" value="-101"><output data-out="s0"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Đường truyền">
+            <label>Khoảng cách <input name="d" type="range" min="1" max="100" step="1" value="15"><output data-out="d"></output></label>
+            <label>Hệ số N <input name="n" type="range" min="2" max="4" step="0.1" value="3"><output data-out="n"></output></label>
+            <label>Số bức tường <input name="walls" type="range" min="0" max="6" step="1" value="2"><output data-out="walls"></output></label>
+            <label>Mỗi tường <input name="lw" type="range" min="0" max="10" step="1" value="5"><output data-out="lw"></output></label>
+          </div>
+          <div class="ctl-group" role="group" aria-label="Wi-Fi và độ tin cậy">
+            <label class="check"><input name="wifi" type="checkbox" checked> Wi-Fi đang phát</label>
+            <label>Router cách hub <input name="dw" type="range" min="0.3" max="20" step="0.1" value="3"><output data-out="dw"></output></label>
+            <label>Kênh cách tâm Wi-Fi <input name="df" type="range" min="9" max="40" step="0.5" value="22.5"><output data-out="df"></output></label>
+            <label>Độ tin cậy
+              <select name="p">
+                <option value="0.1">90%</option>
+                <option value="0.01" selected>99%</option>
+                <option value="0.001">99.9%</option>
+              </select>
+            </label>
+            <label class="check"><input name="div" type="checkbox"> hai ăng-ten (diversity)</label>
+          </div>
+        </div>
+        <canvas class="h-xl" role="img" aria-label="Biểu đồ thác nước của ngân sách: công suất phát, độ lợi ăng-ten, suy hao đường truyền, tường, độ lợi ăng-ten thu, ra mức thu; các vạch độ nhạy gốc, độ nhạy khi có Wi-Fi và mức tối thiểu cần có sau khi cộng biên fading"></canvas>
+        <div class="legend">
+          <span style="--c: var(--green)">độ nhạy gốc</span>
+          <span style="--c: var(--accent)">độ nhạy khi Wi-Fi rò vào</span>
+          <span style="--c: var(--ochre)">mức tối thiểu cần = độ nhạy hiệu dụng + biên fading</span>
+        </div>
+        <div class="scroll"><table class="steps" data-out="tbl"></table></div>
+        <p class="status" data-out="msg" aria-live="polite"></p>
+      </section>
+      <p class="try"><b>Thử:</b> với các giá trị mặc định, mức thu −75.5 dBm nhưng mức cần là −72.7 dBm: <b>thiếu 2.8 dB</b>, dù chip "nhạy −101 dBm" và biên nhìn thô là 25.5 dB. Cách sửa, thử từng cái rồi trả lại: bật <b>hai ăng-ten</b>: biên fading giảm từ 20 xuống 9.8 dB, biên +7.4 dB. Tăng công suất phát lên +13 dBm: +0.2 dB, vừa đủ. Hai ăng-ten 3 dBi (mỗi đầu): +3.2 dB. Dời router ra 10 m: +3.7 dB. Đổi độ nhạy gốc từ −101 sang −105.4: biên chỉ nhúc nhích từ −2.8 lên −2.4, vì Wi-Fi mới là thứ giới hạn. Đổi độ tin cậy sang 99.9%: thiếu 12.8 dB, và cũng là lý do "chạy được" khác xa "đáng tin".</p>
+
+      <div class="calc">
+        <p class="calc-title">Ví dụ tính tay · từng dòng của bảng với giá trị mặc định</p>
+        <p class="eq">suy hao 15 m, N = 3:  40.2 + 30 · log₁₀(15) = 40.2 + 35.3 = 75.5 dB       tường:  2 · 5 = 10 dB<br>mức thu:  10 + 0 − 75.5 − 10 + 0 = −75.5 dBm<br>blocker từ router 3 m:  20 − 40.2 − 20·log₁₀(3) = −29.7 dBm;  R(22.5 MHz) = 63.6 dB;  rò −93.3 dBm<br>độ nhạy hiệu dụng:  −101 ⊕ −93.3 = −92.7 dBm<br>biên fading 99%:  x = −ln(0.99) = 0.01005;  10·log₁₀(0.01005) = −20.0 dB  →  biên 20.0 dB<br>mức cần:  −92.7 + 20.0 = −72.7 dBm       biên:  −75.5 − (−72.7) = −2.8 dB</p>
+        <p>Bài học nằm ở thứ tự phép tính: chip nghe được tới −101 dBm, nhưng sau Wi-Fi còn −92.7, sau fading phải có −72.7. Ba con số đó cách nhau gần 30 dB, và datasheet chỉ in số đầu tiên.</p>
+      </div>
+      <div class="work">
+        <p class="calc-title">Đi làm</p>
+        <p>Làm bảng này trước khi chọn chip và trước khi vẽ bo. Mỗi dòng cho biết một đòn bẩy: phát to hơn (mục 6, đắt), độ nhạy (mục 4, rẻ nếu không bị Wi-Fi giới hạn), vị trí đặt hub và chọn kênh (mục 10, 13, miễn phí), ăng-ten tốt hơn và diversity (mục 16 đến 18). Thứ tự ưu tiên của tôi: <b>miễn phí trước, rẻ sau, đắt cuối cùng</b>.</p>
+      </div>
+
+      <h2 id="hien-truong">Chẩn đoán ngoài hiện trường, tự kiểm tra và tổng kết</h2>
+      <p>Khi sản phẩm đã ở nhà khách hàng, triệu chứng thường không nói tên nguyên nhân. Bảng sau là cách tôi nối từ triệu chứng về một giả thuyết, một phép đo để kiểm giả thuyết, và cách sửa.</p>
+      <table class="risk big">
+        <thead><tr><th>Triệu chứng</th><th>Nghi ngờ</th><th>Phép đo</th><th>Cách sửa</th></tr></thead>
+        <tbody>
+          <tr><td>Tốt ở 3 m, mất ở 8 m, nhà yên tĩnh</td><td>Thiếu biên liên kết (N cao, tường)</td><td>RSSI ở 1, 2, 4, 8 m trên trục log; độ dốc cho N (mục 3)</td><td>Tăng độ lợi ăng-ten, thêm router, nâng công suất phát</td></tr>
+          <tr><td>Mất đúng lúc cả nhà xem video</td><td>Blocker Wi-Fi làm tụt độ nhạy</td><td>Tắt Wi-Fi thử; quét phổ quanh thiết bị; đo PER theo kênh (mục 10)</td><td>Đổi kênh 15, 20, 25 hay 26; kéo hub xa router; chip có blocking tốt hơn</td></tr>
+          <tr><td>Hub để cạnh router thì rớt</td><td>Blocker sát (−10 đến −20 dBm), vùng nén</td><td>Dời hub 1 đến 2 m, xem PER có đổi (mục 13)</td><td>Cách ly vật lý; bộ lọc ngoài; chip tuyến tính hơn</td></tr>
+          <tr><td>Đứng yên vẫn lúc được lúc không; nhích vài cm là đổi</td><td>Multipath fading</td><td>Ghi RSSI theo thời gian; nhích ăng-ten 3 đến 6 cm (mục 15)</td><td>Thêm biên fading; đổi vị trí; nhảy tần; diversity nếu K nhỏ</td></tr>
+          <tr><td>PER cao dù RSSI vẫn dư</td><td>RSSI đo cả nhiễu trong kênh, không phân biệt tín hiệu với nhiễu</td><td>Đo PER hay LQI chứ không chỉ RSSI; so với lúc Wi-Fi yên</td><td>Xử lý nguồn nhiễu (kênh, khoảng cách), không tăng công suất</td></tr>
+          <tr><td>Cập nhật OTA chậm, pin tụt</td><td>PER cao dẫn tới nhiều lần gửi lại (mục 14)</td><td>Đếm lần thử lại và ACK hỏng</td><td>Chữa nguyên nhân PER; đừng chỉ tăng số lần thử lại</td></tr>
+          <tr><td>Chip mới "tốt hơn" mà tầm xa không đổi</td><td>Chiều yếu của liên kết là chiều khác (mục 7)</td><td>Đo từng chiều riêng; so ngân sách hai chiều</td><td>Cải thiện độ nhạy của chính mình, không phải công suất phát</td></tr>
+        </tbody>
+      </table>
+
+      <div class="calc">
+        <p class="calc-title">Ba ca tính tay</p>
+        <p><b>Ca 1, RSSI theo khoảng cách (số giả định):</b> −52, −61, −70, −79 dBm ở 1, 2, 4, 8 m. Mỗi lần nhân đôi giảm 9 dB, nên N = 9 / 3.01 = 3.0. Ngoại suy: 16 m còn −88 dBm. Độ nhạy −95 dBm cộng biên fading 10 dB đòi mức thu ≥ −85 dBm: −52 − 9·log₂(d) = −85 cho d = 12.7 m; nếu chỉ nhìn độ nhạy (−95 dBm) thì tưởng được 27 m.</p>
+        <p><b>Ca 2, mất khi xem video:</b> hub thu −82 dBm, rảnh Wi-Fi thì biên 19 dB, PER 0. Router phát ở cách hub 1 m (blocker −20.2 dBm). Kênh 15 cách tâm Wi-Fi kênh 6 là 12 MHz: R = 49.7 dB, độ nhạy hiệu dụng −69.9 dBm, biên −12.1 dB, gói rớt gần hết. Đổi sang kênh 25 (cách 38 MHz): R = 76.5 dB, độ nhạy −95.3 dBm, biên +13.3 dB, gói về đủ. Nguyên nhân: kênh, không phải khoảng cách tới hub.</p>
+        <p><b>Ca 3, fading và diversity:</b> biên trung bình 12 dB. Xác suất một ăng-ten rơi dưới ngưỡng: 1 − e<sup>−10<sup>−1.2</sup></sup> = 6.1%. Hai ăng-ten độc lập: 6.1%² = 0.37%.</p>
+      </div>
+
+      <h3>Tự kiểm tra</h3>
+      <p>Sáu câu, đáp án ở trong từng mục. Tự trả lời trước khi mở.</p>
+      <details>
+        <summary>1. Nút X (+0 dBm, −100 dBm) nói với Y (+20 dBm, −90 dBm): ngân sách giới hạn bao nhiêu, và tăng công suất phát của X thêm 10 dB hay tăng độ nhạy của X thêm 10 dB có giúp không?</summary>
+        <p>X→Y = 0 + 90 = 90 dB; Y→X = 20 + 100 = 120 dB; giới hạn 90 dB. Tăng công suất phát của X lên +10: X→Y = 100 dB, giới hạn thành 100 dB: có giúp 10 dB. Tăng độ nhạy của X: chỉ tăng chiều Y→X, chiều yếu vẫn 90 dB: không giúp. Bài học: luôn xác định chiều yếu trước (mục 7).</p>
+      </details>
+      <details>
+        <summary>2. Hai tín hiệu −90 dBm và −100 dBm cộng lại là bao nhiêu?</summary>
+        <p>−89.6 dBm. Cộng công suất chứ không cộng số dBm: 10<sup>−9</sup> + 10<sup>−10</sup> = 1.1 · 10<sup>−9</sup> mW (mục 2).</p>
+      </details>
+      <details>
+        <summary>3. Blocker −40 dBm, bộ lọc chắn 60 dB, độ nhạy gốc −101 dBm: độ nhạy hiệu dụng?</summary>
+        <p>Rò vào kênh −100 dBm. −100 ⊕ −101 = −97.5 dBm: tụt 3.5 dB so với gốc (mục 11).</p>
+      </details>
+      <details>
+        <summary>4. Thêm 6 dB vào ngân sách, N = 3: tầm xa nhân bao nhiêu?</summary>
+        <p>10<sup>6/30</sup> = 1.58 lần (mục 8). Ở N = 2 là 2 lần; ở N = 4 là 1.41 lần.</p>
+      </details>
+      <details>
+        <summary>5. Preamble 128 µs, mỗi lượt nghe 30 µs, cần 32 µs để khóa tần số: select best có luôn kịp không? Nếu lượt nghe là 33 µs?</summary>
+        <p>Điều kiện 3·D + khóa ≤ 128. D = 30: 90 + 32 = 122 ≤ 128: kịp. D = 33: 99 + 32 = 131 &gt; 128: không kịp trong mọi trường hợp, phải lùi về select first good (mục 17).</p>
+      </details>
+      <details>
+        <summary>6. Vì sao ở độ tin cậy 99% cần khoảng 20 dB fade margin với một ăng-ten, và hai ăng-ten độc lập cho phép giảm xuống khoảng bao nhiêu?</summary>
+        <p>Rayleigh: P(công suất &lt; x · trung bình) = 1 − e<sup>−x</sup>; 1% ứng với x = 0.01, tức −20 dB. Hai nhánh độc lập: (1 − e<sup>−x</sup>)² = 0.01 cho x = 0.105, tức −9.8 dB: biên giảm xuống khoảng 10 dB (mục 15, 16).</p>
+      </details>
+
+      <h3>Tổng kết</h3>
+      <table>
+        <thead><tr><th>Chỉ số</th><th>Một câu</th><th>Con số cần nhớ</th></tr></thead>
+        <tbody>
+          <tr><td>dB, dBm</td><td>Nhân thành cộng; công suất cộng bằng mW</td><td>+3 dB ×2; +10 dB ×10; −105 nhạy hơn −100</td></tr>
+          <tr><td>Suy hao</td><td>Mất 3·N dB mỗi lần nhân đôi khoảng cách</td><td>PL(1 m) = 40.2 dB; N = 3 đến 4 trong nhà</td></tr>
+          <tr><td>Độ nhạy</td><td>Sàn nhiệt + NF + SNR tối thiểu, tại PER 1%</td><td>−174 + 10·log₁₀(B) + NF + SNR; −111 dBm ở 2 MHz</td></tr>
+          <tr><td>Công suất phát</td><td>Đắt: +3 dB là ×2 dòng PA</td><td>+10 dB phát ≈ ×1.78 tầm xa ở N = 4</td></tr>
+          <tr><td>Link budget</td><td>Chỉ tốt bằng chiều yếu hơn</td><td>min(Ptx_A − S_B, Ptx_B − S_A)</td></tr>
+          <tr><td>Selectivity, blocking</td><td>Rò (1 dB mỗi dB) rồi nén (hơn 1 dB mỗi dB)</td><td>S_eff = S₀ ⊕ (P_blocker − R); hàng −10 và −40 dBm</td></tr>
+          <tr><td>Multipath, diversity</td><td>Hố fading; hai ăng-ten cắt hố, không làm sóng mạnh hơn</td><td>fade margin 20 dB (99%); lợi 5 đến 10 dB ở đuôi; λ/4 = 3.1 cm ở 2.4 GHz</td></tr>
+        </tbody>
+      </table>
+      <p>Tên buổi nói là "RF đủ tốt có thực sự đủ tốt không?". Câu trả lời từ các phép tính trên: "đủ tốt" chỉ có nghĩa khi viết được thành một con số. Với một sản phẩm cụ thể đó là biên liên kết <b>sau khi</b> trừ độ nhạy bị Wi-Fi ăn mất và trừ biên cho fading ở độ tin cậy cần có; còn một con chip chỉ "đủ tốt" cho một ngôi nhà yên tĩnh có thể thất bại ngay trong căn nhà có router đặt cạnh hub.</p>
+
+      <h2 id="code">File code của bài</h2>
+      <p>Mọi con số trong bài đến từ <code>rf-core.js</code>: dB, tạp âm, suy hao, link budget, độ chắn, mô hình fading và chọn ăng-ten. Cả mô phỏng và <code>check-rf.js</code> đều dùng đúng đoạn dưới đây; chạy <code>node check-rf.js</code> (để cùng thư mục với <code>rf-core.js</code>) sẽ in lại mọi con số, và đánh dấu <b>KHỚP</b> hay <b>LỆCH</b> khi đối chiếu với slide. Chỗ lệch duy nhất (83.2 m của Competitor A, mục 7) được đánh dấu là lệch đã biết.</p>
+      <pre><code data-from="#rf-core" data-filename="rf-core.js"></code></pre>
+      <ul class="code-links">
+        <li><a data-from="#rf-core" download="rf-core.js">rf-core.js <small>công thức dùng chung cho trang và Node</small></a></li>
+        <li><a data-from="#check-code" download="check-rf.js">check-rf.js <small>tái hiện mọi con số trong bài và đối chiếu slide</small></a></li>
+      </ul>
+    </article>
+  </main>
+
+  <script>
+/* Khung dùng chung cho các mô phỏng nhỏ ở từng phần của bài.
+ * Viz.sim(id, formats, draw) tìm mọi input/select có name trong <section id="id">, rồi gọi
+ * draw(p, views, c, s) mỗi khi tham số, kích thước khung hay theme đổi:
+ *   p      giá trị các tham số theo name
+ *   views  các canvas trong section theo thứ tự xuất hiện: { ctx, w, h }
+ *   c      bảng màu đọc từ CSS
+ *   s      chính mô phỏng này (s.root là section)
+ * draw trả về { tên: chữ }; chữ được điền vào phần tử có data-out="tên". `formats` làm việc đó
+ * cho giá trị của từng thanh trượt (cùng tên với thanh trượt). */
+(function (global) {
+  const TAU = 2 * Math.PI;
+  const sims = [];
+
+  function palette() {
+    const cs = getComputedStyle(document.documentElement);
+    const get = (name) => cs.getPropertyValue(name).trim();
+    return {
+      bg: get('--bg'), surface: get('--surface'), ochre: get('--ochre'), rule: get('--rule'), text: get('--text'), muted: get('--muted'),
+      faint: get('--faint'), border: get('--border'), accent: get('--accent'), indigo: get('--indigo'), green: get('--green'), mono: get('--mono'),
+    };
+  }
+
+  function fit(v) {                                // canvas sắc nét: kích thước thật = kích thước CSS × devicePixelRatio
+    const dpr = window.devicePixelRatio || 1;
+    const r = v.canvas.getBoundingClientRect();
+    v.w = r.width; v.h = r.height;
+    v.canvas.width = Math.round(r.width * dpr);
+    v.canvas.height = Math.round(r.height * dpr);
+    v.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // Xoá khung và ghi tiêu đề ở góc trên; `right` chỉ hiện nếu còn chỗ.
+  function title(v, c, left, right) {
+    const { ctx, w, h } = v;
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '11px ' + c.mono;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = c.text;
+    ctx.textAlign = 'left';
+    while (left.length > 8 && ctx.measureText(left).width > w - 16) left = left.slice(0, -2).replace(/\s+$/, '') + '…';   // rút gọn nếu quá rộng
+    ctx.fillText(left, 8, 13);
+    const room = w - 16 - ctx.measureText(left).width;
+    if (right && ctx.measureText(right).width + 16 < room) {
+      ctx.fillStyle = c.muted;
+      ctx.textAlign = 'right';
+      ctx.fillText(right, w - 8, 13);
+    }
+  }
+
+  function line(ctx, x0, y0, x1, y1, color, dash, width) {
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+    ctx.strokeStyle = color; ctx.lineWidth = width || 1;
+    ctx.setLineDash(dash || []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  function polyline(ctx, n, xOf, yOf, color, width, dash) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) (i ? ctx.lineTo : ctx.moveTo).call(ctx, xOf(i), yOf(i));
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round';
+    ctx.setLineDash(dash || []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  function dot(ctx, x, y, r, color) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = color; ctx.fill(); }
+  function label(ctx, text, x, y, color, align) { ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.fillText(text, x, y); }
+  function rect(ctx, x, y, w, h, fill, stroke) {
+    if (fill) { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1); }
+  }
+  function arrow(ctx, x0, y0, x1, y1, color, width, head) {
+    const a = Math.atan2(y1 - y0, x1 - x0), h = head || 7;
+    line(ctx, x0, y0, x1, y1, color, null, width || 1.5);
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - h * Math.cos(a - 0.4), y1 - h * Math.sin(a - 0.4));
+    ctx.lineTo(x1 - h * Math.cos(a + 0.4), y1 - h * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+  }
+
+  const value = (el) => (el.type === 'checkbox' ? el.checked : el.value !== '' && !isNaN(el.value) ? +el.value : el.value);
+
+  function sim(id, formats, draw) {
+    const root = document.getElementById(id);
+    const views = Array.from(root.querySelectorAll('canvas'), (canvas) => ({ canvas, ctx: canvas.getContext('2d'), w: 0, h: 0 }));
+    const controls = Array.from(root.querySelectorAll('input[name], select[name]'));
+    const put = (name, text) => root.querySelectorAll(`[data-out="${name}"]`).forEach((el) => { el.innerHTML = text; });
+    const s = {
+      root,
+      p: {},
+      render() {
+        if (views.some((v) => !v.w)) return;       // chưa đo được kích thước (đang ẩn hoặc chưa bố cục)
+        s.p = Object.fromEntries(controls.map((el) => [el.name, value(el)]));
+        for (const name in formats) put(name, formats[name](s.p[name]));
+        const out = draw(s.p, views, palette(), s) || {};
+        for (const name in out) put(name, out[name]);
+      },
+      resize() { views.forEach(fit); s.render(); },
+    };
+    controls.forEach((el) => el.addEventListener('input', s.render));
+    sims.push(s);
+    new ResizeObserver(() => requestAnimationFrame(s.resize)).observe(root);   // hoãn một nhịp để đổi bố cục trong lúc vẽ không gây vòng lặp
+    return s;
+  }
+
+  const redrawAll = () => sims.forEach((s) => s.render());
+  new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+  if (document.fonts) document.fonts.ready.then(redrawAll);
+
+  global.Viz = { sim, title, line, polyline, dot, label, rect, arrow, TAU };
+})(globalThis);
+
+/* Định dạng chữ cho số liệu (dấu trừ thật U+2212 cho đẹp và khỏi lẫn với gạch nối). */
+const Fmt = (() => {
+  const sg = (x) => (x < 0 ? '−' : '');
+  const fix = (x, d) => { const t = Math.abs(x).toFixed(d); return +t === 0 ? (0).toFixed(d) : sg(x) + t; };
+  return {
+    n: (x, d = 1) => fix(x, d),
+    pl: (x, d = 1) => (x > 0 ? '+' : '') + fix(x, d),                   // có dấu + cho số dương
+    dbm: (x, d = 1) => (x === -Infinity ? 'không có' : fix(x, d) + ' dBm'),
+    db: (x, d = 1) => fix(x, d) + ' dB',
+    m: (x) => (x >= 1000 ? (x / 1000).toFixed(1) + ' km' : x >= 100 ? Math.round(x) + ' m' : x.toFixed(1) + ' m'),
+    pct: (x, d = 1) => (x * 100).toFixed(d) + '%',
+    power(mw) {                                                          // mW -> W, mW, µW, nW, pW, fW
+      const u = [[1e3, 'W', 1e-3], [1, 'mW', 1], [1e-3, 'µW', 1e3], [1e-6, 'nW', 1e6], [1e-9, 'pW', 1e9], [0, 'fW', 1e12]];
+      const k = u.find((r) => mw >= r[0]) || u[u.length - 1];
+      const v = mw * k[2];
+      return (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' ' + k[1];
+    },
+  };
+})();
+
+/* Trục đồ thị: Ch.frame(v, c, opts) xoá khung, vẽ lưới và trục, trả về X(), Y() đổi giá trị -> điểm ảnh.
+ * opts: xmin xmax ymin ymax, xlog, xt/yt (các vạch), xf/yf (định dạng nhãn), xlabel, title/sub, m (lề). */
+const Ch = (() => {
+  function frame(v, c, o) {
+    const { ctx, w, h } = v;
+    const m = Object.assign({ l: 42, r: 10, t: 24, b: 28 }, o.m);
+    const x0 = m.l, x1 = w - m.r, y0 = m.t, y1 = h - m.b;
+    const fx = o.xlog ? Math.log10 : (x) => x;
+    const a = fx(o.xmin), b = fx(o.xmax);
+    const X = (x) => x0 + (fx(x) - a) / (b - a) * (x1 - x0);
+    const Y = (y) => y1 - (y - o.ymin) / (o.ymax - o.ymin) * (y1 - y0);
+    Viz.title(v, c, o.title || '', o.sub || '');
+    ctx.font = '10px ' + c.mono;
+    (o.yt || []).forEach((t) => { Viz.line(ctx, x0, Y(t), x1, Y(t), c.border); Viz.label(ctx, o.yf ? o.yf(t) : String(t), x0 - 4, Y(t) + 3, c.muted, 'right'); });
+    (o.xt || []).forEach((t) => { Viz.line(ctx, X(t), y0, X(t), y1, c.border); Viz.label(ctx, o.xf ? o.xf(t) : String(t), X(t), y1 + 13, c.muted, 'center'); });
+    ctx.strokeStyle = c.faint; ctx.lineWidth = 1; ctx.setLineDash([]);
+    ctx.strokeRect(x0 + .5, y0 + .5, x1 - x0, y1 - y0);
+    if (o.xlabel) Viz.label(ctx, o.xlabel, (x0 + x1) / 2, h - 3, c.muted, 'center');
+    const clip = () => { ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip(); };
+    return { X, Y, x0, x1, y0, y1, clip, restore: () => ctx.restore() };
+  }
+
+  /* Biểu đồ thác nước theo dBm: mỗi bước là một cột (abs: từ đáy lên mức đó) hoặc một đoạn nổi (delta: cộng thêm dB).
+   * o: title, sub, ymin, ymax, yt, steps [{label, kind:'abs'|'delta', value, color}], lines [{y, text, color, dash}] */
+  function waterfall(v, c, o) {
+    const { ctx } = v;
+    const f = frame(v, c, { title: o.title, sub: o.sub, xmin: 0, xmax: 1, ymin: o.ymin, ymax: o.ymax, yt: o.yt, yf: (t) => Fmt.n(t, 0), m: { l: 40, r: v.w < 480 ? Math.min(o.rm || 70, 52) : (o.rm || 70), t: 24, b: 32 } });
+    const narrow = v.w < 480;
+    const n = o.steps.length, slot = (f.x1 - f.x0) / n, bw = Math.min(48, slot * 0.62);
+    ctx.font = (narrow ? '9px ' : '10px ') + c.mono;
+    let L = 0, px = null;
+    o.steps.forEach((st, i) => {
+      const cx = f.x0 + slot * (i + 0.5);
+      let ya, yb;
+      const join = st.kind === 'delta' ? L : st.value;           // mức nối từ cột trước sang cột này
+      if (st.kind === 'delta') { ya = f.Y(L); L += st.value; yb = f.Y(L); }
+      else { L = st.value; ya = f.Y(L); yb = f.Y(o.ymin); }
+      const top = Math.min(ya, yb), hgt = Math.max(2, Math.abs(yb - ya));
+      ctx.globalAlpha = st.kind === 'delta' ? 0.55 : 0.9;
+      ctx.fillStyle = st.color;
+      ctx.fillRect(cx - bw / 2, top, bw, hgt);
+      ctx.globalAlpha = 1;
+      if (px !== null) Viz.line(ctx, px, f.Y(join), cx - bw / 2, f.Y(join), c.faint, [2, 3]);
+      px = cx + bw / 2;
+      const txt = (st.kind === 'delta' ? Fmt.pl(st.value, 1) : Fmt.n(st.value, 1));
+      Viz.label(ctx, txt, cx, Math.max(f.y0 + 11, top - 4), c.text, 'center');
+      String(narrow && st.short ? st.short : st.label).split('\n').forEach((t, k) => Viz.label(ctx, t, cx, f.y1 + 13 + 11 * k, c.muted, 'center'));
+    });
+    const ls = (o.lines || []).slice().sort((a, b) => b.y - a.y), placed = [];
+    ls.forEach((l) => {
+      const y = f.Y(l.y);
+      if (y >= f.y0 && y <= f.y1) Viz.line(ctx, f.x0, y, f.x1, y, l.color, l.dash === false ? null : [5, 4], 1.5);
+      let ty = Math.min(f.y1, Math.max(f.y0 + 8, y + 3));
+      while (placed.some((p) => Math.abs(p - ty) < 11)) ty -= 11;
+      placed.push(ty);
+      Viz.label(ctx, narrow && l.short ? l.short : l.text, f.x1 + 4, ty, l.color, 'left');
+    });
+    return f;
+  }
+  return { frame, waterfall };
+})();
+  </script>
+  <script id="rf-core">
+/* rf-core.js: các công thức RF dùng trong bài. Một nguồn duy nhất:
+ * trang chạy đúng đoạn này cho mô phỏng, và check-rf.js chạy lại nó trong Node để đối chiếu số liệu.
+ * Đơn vị: công suất dBm, tỉ số dB, tần số Hz (trừ chỗ ghi MHz), khoảng cách mét. */
+const RF = (() => {
+  const L10 = Math.log10;
+  const TAU = 2 * Math.PI;
+
+  // ---------- dB ----------
+  const toDb = (ratio) => 10 * L10(ratio);                 // tỉ số công suất -> dB
+  const fromDb = (db) => Math.pow(10, db / 10);            // dB -> tỉ số công suất
+  const dbmToMw = (dbm) => fromDb(dbm);
+  const mwToDbm = (mw) => toDb(mw);
+  const addDbm = (...v) => toDb(v.reduce((s, x) => s + fromDb(x), 0)); // cộng công suất, không cộng số dBm
+
+  // ---------- tạp âm và độ nhạy ----------
+  const noiseDbm = (bwHz) => -174 + toDb(bwHz);            // kTB ở 290 K: -174 dBm/Hz + 10 log B
+  const sensitivity = (bwHz, nf, snr) => noiseDbm(bwHz) + nf + snr;
+
+  // ---------- suy hao ----------
+  const fspl = (dM, fHz) => 20 * L10(dM) + 20 * L10(fHz) - 147.55;   // không gian tự do
+  const PL1 = fspl(1, 2.44e9);                                       // 40.2 dB tại 1 m, 2.44 GHz
+  const pathLoss = (dM, n, pl1 = PL1) => pl1 + 10 * n * L10(dM);     // mô hình log-distance
+  const rangeM = (allowedDb, n, pl1 = PL1) => Math.pow(10, (allowedDb - pl1) / (10 * n));
+  const SLIDE_C = 34.206;                                            // hằng số suy ra từ slide (xem bài), làm tròn 34.2 dB
+  const rangeGain = (db, n) => Math.pow(10, db / (10 * n));          // thêm db thì tầm xa nhân bao nhiêu
+  const link = (a, b) => {                                           // hai nút {tx, s}: ngân sách từng chiều
+    const ab = a.tx - b.s, ba = b.tx - a.s;
+    return { ab, ba, limit: Math.min(ab, ba) };
+  };
+
+  // ---------- gói tin ----------
+  const per = (margin) => 1 / (1 + Math.exp(1.838 * (margin + 2.5)));   // PER = 1% ở biên 0 dB, 50% ở -2.5 dB
+  const expAttempts = (p, retries) => (p >= 1 ? retries + 1 : (1 - Math.pow(p, retries + 1)) / (1 - p));
+  const delivery = (p, retries) => 1 - Math.pow(p, retries + 1);
+
+  // ---------- chọn lọc và blocking ----------
+  // Độ chắn tổng R(Δf) từ blocker Wi-Fi tới kênh 802.15.4. Chỉ 12.5 và 22.5 MHz là điểm suy ra từ số đo;
+  // đoạn còn lại là nội suy/ngoại suy tuyến tính để vẽ.
+  const REJ = [[0, 5], [8, 5], [12.5, 55.3], [22.5, 63.6]];
+  function rejection(df) {
+    df = Math.abs(df);
+    for (let i = 1; i < REJ.length; i++) {
+      if (df <= REJ[i][0]) {
+        const [x0, y0] = REJ[i - 1], [x1, y1] = REJ[i];
+        return y0 + (y1 - y0) * (df - x0) / (x1 - x0);
+      }
+    }
+    const [x0, y0] = REJ[REJ.length - 2], [x1, y1] = REJ[REJ.length - 1];
+    return Math.min(90, y1 + (y1 - y0) / (x1 - x0) * (df - x1));
+  }
+  // Blocker pb (dBm) rò qua bộ lọc như tạp âm thêm; nếu pb > knee thì khuếch đại bị nén thêm 1 dB cho mỗi dB.
+  function effSens(s0, pb, R, knee = Infinity) {
+    const leak = pb - R;
+    const sens = addDbm(s0, leak);
+    return sens + Math.max(0, pb - knee);
+  }
+
+  // Số đo trong slide (dBm): [12.5 MHz, 22.5 MHz] cách tâm kênh Wi-Fi 6
+  const BLOCK = {
+    '-10': { xG24: [-65.3, -73.6], xG301: [-61.2, -72.1], A: [-33.7, -45.6], B: [-49.2, -66.3] },
+    '-40': { xG24: [-94.9, -100.1], xG301: [-91.1, -99.3], A: [-89.5, -97.1], B: [-86.1, -95.7] },
+  };
+
+  // ---------- kênh 2.4 GHz ----------
+  const wifiMHz = (ch) => 2407 + 5 * ch;                   // kênh 1..13
+  const zigbeeMHz = (ch) => 2405 + 5 * (ch - 11);          // kênh 802.15.4 11..26
+  const bleMHz = (idx) => (idx === 37 ? 2402 : idx === 38 ? 2426 : idx === 39 ? 2480 : idx < 11 ? 2404 + 2 * idx : 2428 + 2 * (idx - 11));
+  const C0 = 299792458;
+  const lambdaCm = (fHz) => C0 / fHz * 100;
+
+  // ---------- thời gian gói 802.15.4 / BLE ----------
+  const SYMBOL_US = 16;                                    // 4 bit mỗi ký hiệu, 62.5 ksymbol/s
+  const PREAMBLE_154_US = 4 * 2 * SYMBOL_US;               // 4 byte = 8 ký hiệu = 128 µs
+  const PREAMBLE_BLE_US = 8;                               // LE 1M: 1 byte x 8 µs
+
+  // ---------- fading ----------
+  function bessel0(x) {                                    // J0 bằng chuỗi lũy thừa
+    let s = 0, term = 1, k = 0;
+    const q = -(x * x) / 4;
+    while (Math.abs(term) > 1e-14 && k < 80) { s += term; k++; term *= q / (k * k); }
+    return s;
+  }
+  const jakes = (dOverLambda) => bessel0(TAU * dOverLambda);          // tương quan phức giữa hai anten, tán xạ đẳng hướng 2D
+  const rayleighLevel = (p) => toDb(-Math.log(1 - p));                // mức công suất (dB so với trung bình) mà xác suất rơi dưới nó là p
+  const diversityLevel = (p, n = 2) => toDb(-Math.log(1 - Math.pow(p, 1 / n)));   // chọn tốt nhất trong n nhánh độc lập
+
+  function rng(seed) {                                     // xorshift32 + Box-Muller, tái lập được
+    let s = seed >>> 0 || 1;
+    const u = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return (s + 0.5) / 4294967296; };
+    const g = () => Math.sqrt(-2 * Math.log(u())) * Math.cos(TAU * u());
+    return { u, g };
+  }
+  // Hai nhánh fading (công suất, trung bình 1). kdB = hệ số Rice (đường thẳng/tán xạ), -Infinity = Rayleigh.
+  function fadingPair(n, dOverLambda, kdB, seed) {
+    const r = rng(seed), rho = jakes(dOverLambda), s = Math.sqrt(1 - rho * rho);
+    const K = kdB === -Infinity ? 0 : fromDb(kdB), los = Math.sqrt(K / (K + 1)), sc = Math.sqrt(1 / (K + 1) / 2);
+    const a = new Float64Array(n), b = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const xr = r.g(), xi = r.g(), wr = r.g(), wi = r.g();
+      const h1r = los + sc * xr, h1i = sc * xi;
+      const h2r = los + sc * (rho * xr + s * wr), h2i = sc * (rho * xi + s * wi);
+      a[i] = h1r * h1r + h1i * h1i;
+      b[i] = h2r * h2r + h2i * h2i;
+    }
+    return { a, b };
+  }
+  const quantile = (arr, p) => { const s = Float64Array.from(arr).sort(); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
+  const mean = (arr) => arr.reduce((s, x) => s + x, 0) / arr.length;
+  // Lợi (dB) của "chọn nhánh tốt" so với một anten tại mức outage p
+  function diversityGain(pair, p) {
+    const best = pair.a.map((x, i) => Math.max(x, pair.b[i]));
+    return toDb(quantile(best, p)) - toDb(quantile(pair.a, p));
+  }
+
+  // Chuỗi fading biến đổi chậm theo thời gian (AR(1), a = độ nhớ giữa hai mẫu liên tiếp), hai nguồn độc lập.
+  // Ăng-ten 1 lấy nguồn 1; ăng-ten 2 trộn nguồn 1 và 3 theo hệ số tương quan rho. Công suất trung bình mỗi ăng-ten = 1.
+  function fadingBase(n, a, seed) {
+    const r = rng(seed), s = Math.sqrt(1 - a * a), h = Math.SQRT1_2;
+    const out = { x1r: new Float64Array(n), x1i: new Float64Array(n), x3r: new Float64Array(n), x3i: new Float64Array(n) };
+    let a1r = r.g() * h, a1i = r.g() * h, a3r = r.g() * h, a3i = r.g() * h;
+    for (let i = 0; i < n; i++) {
+      a1r = a * a1r + s * r.g() * h; a1i = a * a1i + s * r.g() * h;
+      a3r = a * a3r + s * r.g() * h; a3i = a * a3i + s * r.g() * h;
+      out.x1r[i] = a1r; out.x1i[i] = a1i; out.x3r[i] = a3r; out.x3i[i] = a3i;
+    }
+    return out;
+  }
+  function fadingFromBase(b, rho) {
+    const n = b.x1r.length, s = Math.sqrt(1 - rho * rho);
+    const p1 = new Float64Array(n), p2 = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      p1[i] = b.x1r[i] * b.x1r[i] + b.x1i[i] * b.x1i[i];
+      const yr = rho * b.x1r[i] + s * b.x3r[i], yi = rho * b.x1i[i] + s * b.x3i[i];
+      p2[i] = yr * yr + yi * yi;
+    }
+    return { p1, p2 };
+  }
+
+  // ---------- multipath: tổng các sóng tới một điểm ----------
+  const PATHS = (() => {                                   // 10 hướng tới và pha đầu cố định, để đồ thị không nhảy khi kéo thanh trượt
+    const r = rng(4242);
+    return Array.from({ length: 10 }, () => ({ th: (30 + 300 * r.u()) * Math.PI / 180, ph: TAU * r.u() }));
+  })();
+  // Công suất (so với chỉ có tia thẳng = 1) tại vị trí xCm khi đi dọc hướng tia thẳng.
+  // M đường phản xạ, tổng công suất phản xạ = r^2 chia đều; M = 1 thì tia phản xạ đến từ phía sau (sóng đứng).
+  function multipath(xCm, M, r, lamCm) {
+    const k = TAU / lamCm;
+    let re = Math.cos(k * xCm), im = Math.sin(k * xCm);
+    for (let i = 0; i < M; i++) {
+      const th = M === 1 ? Math.PI : PATHS[i].th, a = r / Math.sqrt(M);
+      const ph = k * xCm * Math.cos(th) + PATHS[i].ph;
+      re += a * Math.cos(ph); im += a * Math.sin(ph);
+    }
+    return re * re + im * im;
+  }
+
+  // ---------- mesh: số hop từ thiết bị đầu cuối tới hub ----------
+  const HOUSE = {
+    w: 60, h: 30, hub: [4, 15], end: [57, 8],
+    routers: [[10, 6], [14, 24], [19, 14], [25, 5], [27, 22], [33, 13], [38, 26], [41, 8], [46, 18], [50, 4], [52, 24], [55, 15]],
+  };
+  const houseNodes = () => [HOUSE.hub, ...HOUSE.routers, HOUSE.end];     // chỉ số 0 = hub, cuối = thiết bị đầu cuối
+  function meshPath(R) {                                                  // BFS: đường ít hop nhất, hai nút nối nhau nếu cách nhau <= R mét
+    const nd = houseNodes(), last = nd.length - 1, prev = new Array(nd.length).fill(-2);
+    prev[last] = -1;
+    const q = [last];
+    while (q.length) {
+      const u = q.shift();
+      if (u === 0) break;
+      for (let v = 0; v < nd.length; v++) {
+        if (prev[v] === -2 && Math.hypot(nd[u][0] - nd[v][0], nd[u][1] - nd[v][1]) <= R) { prev[v] = u; q.push(v); }
+      }
+    }
+    if (prev[0] === -2) return null;
+    const path = [0];
+    while (path[path.length - 1] !== last) path.push(prev[path[path.length - 1]]);
+    return path;                                                          // [0, ..., last]
+  }
+
+  return {
+    toDb, fromDb, dbmToMw, mwToDbm, addDbm, noiseDbm, sensitivity,
+    fspl, PL1, pathLoss, rangeM, SLIDE_C, rangeGain, link,
+    per, expAttempts, delivery,
+    rejection, effSens, BLOCK,
+    wifiMHz, zigbeeMHz, bleMHz, lambdaCm, SYMBOL_US, PREAMBLE_154_US, PREAMBLE_BLE_US,
+    bessel0, jakes, rayleighLevel, diversityLevel, rng, fadingPair, quantile, mean, diversityGain,
+    HOUSE, houseNodes, meshPath, multipath, fadingBase, fadingFromBase,
+  };
+})();
+if (typeof module !== 'undefined') module.exports = RF;
+  </script>
+  <script>
+/* Mô phỏng các mục 1 đến 9. Mỗi mô phỏng là một lời gọi Viz.sim(id, formats, draw); công thức đều nằm trong RF (rf-core.js). */
+
+// ---------- Mô phỏng tổng ----------
+Viz.sim('sim-main', {
+  d: (v) => v + ' m', n: (v) => v.toFixed(1), ptx: (v) => Fmt.pl(v, 0) + ' dBm', s0: (v) => Fmt.n(v, 1) + ' dBm',
+  dw: (v) => v.toFixed(1) + ' m', df: (v) => v.toFixed(1) + ' MHz',
+}, (p, [v1, v2], c) => {
+  const pl = RF.pathLoss(p.d, p.n);
+  const prx = p.ptx - pl;
+  const pb = p.wifi ? 20 - RF.fspl(p.dw, 2.44e9) : -Infinity;
+  const seffAt = (s0) => RF.effSens(s0, pb, RF.rejection(p.df));
+  const seff = seffAt(p.s0), margin = prx - seff, per = RF.per(margin);
+  const rangeFor = (s) => RF.rangeM(p.ptx - s, p.n);
+  const r0 = rangeFor(p.s0), r1 = rangeFor(seff);
+
+  Ch.waterfall(v1, c, {
+    title: 'Mức công suất tại hub (dBm)', sub: 'nghe được khi cột phải cao hơn vạch đỏ', ymin: -120, ymax: 25, yt: [-100, -80, -60, -40, -20, 0, 20],
+    steps: [
+      { label: 'Công suất\nphát', kind: 'abs', value: p.ptx, color: c.indigo },
+      { label: 'Không khí\nlấy đi', kind: 'delta', value: -pl, color: c.faint },
+      { label: 'Mức thu\ntại hub', kind: 'abs', value: prx, color: margin >= 0 ? c.green : c.accent },
+    ],
+    lines: [
+      { y: p.s0, text: 'S gốc', color: c.green },
+      ...(p.wifi ? [{ y: seff, text: 'S + Wi-Fi', short: 'S+WiFi', color: c.accent }] : []),
+    ],
+  });
+
+  const f = Ch.frame(v2, c, { title: 'Mức thu theo khoảng cách', sub: 'giao điểm với vạch độ nhạy là tầm xa', xmin: 1, xmax: 300, xlog: true, ymin: -130, ymax: 20,
+    xt: [1, 3, 10, 30, 100, 300], xf: (t) => t + ' m', yt: [-120, -90, -60, -30, 0], yf: (t) => Fmt.n(t, 0), xlabel: 'khoảng cách tới hub (log)', m: { l: 44, r: 12, t: 24, b: 30 } });
+  f.clip();
+  const pts = [];
+  for (let i = 0; i <= 80; i++) { const d = Math.pow(10, Math.log10(300) * i / 80); pts.push([d, p.ptx - RF.pathLoss(d, p.n)]); }
+  Viz.polyline(v2.ctx, pts.length, (i) => f.X(pts[i][0]), (i) => f.Y(pts[i][1]), c.indigo, 2);
+  Viz.line(v2.ctx, f.x0, f.Y(p.s0), f.x1, f.Y(p.s0), c.green, [5, 4], 1.5);
+  if (p.wifi) Viz.line(v2.ctx, f.x0, f.Y(seff), f.x1, f.Y(seff), c.accent, [5, 4], 1.5);
+  f.restore();
+  const mark = (d, col) => { if (d >= 1 && d <= 300) { Viz.line(v2.ctx, f.X(d), f.y0, f.X(d), f.y1, col, [2, 3]); } };
+  mark(r0, c.green); if (p.wifi) mark(r1, c.accent);
+  Viz.dot(v2.ctx, f.X(p.d), f.Y(Math.max(-130, prx)), 5, margin >= 0 ? c.green : c.accent);
+
+  return {
+    prx: Fmt.dbm(prx), seff: Fmt.dbm(seff), margin: Fmt.db(margin), per: Fmt.pct(per, 1),
+    r0: Fmt.m(r0), r1: p.wifi ? Fmt.m(r1) : 'như trên',
+    msg: margin >= 0 ? `<span class="good">Nghe được:</span> biên ${Fmt.db(margin)}; blocker tại hub ${Fmt.dbm(pb)}.` : `<span class="bad">Không nghe được:</span> mức thu thấp hơn độ nhạy hiệu dụng ${Fmt.db(-margin)}; blocker tại hub ${Fmt.dbm(pb)}.`,
+  };
+});
+
+// ---------- 2. dB và dBm ----------
+Viz.sim('sim-db', { p1: (v) => `${Fmt.n(v, 0)} dBm = ${Fmt.power(RF.dbmToMw(v))}`, p2: (v) => `${Fmt.n(v, 0)} dBm = ${Fmt.power(RF.dbmToMw(v))}` }, (p, [v], c) => {
+  const f = Ch.frame(v, c, { title: 'Thang dBm', sub: 'mỗi 10 dB là ×10 công suất', xmin: -120, xmax: 30, ymin: 0, ymax: 1, xt: [-120, -90, -60, -30, 0, 30], xf: (t) => Fmt.n(t, 0), m: { l: 12, r: 12, t: 24, b: 26 } });
+  const ctx = v.ctx;
+  const marks = [[20, 'Wi-Fi +20', 0], [0, 'BLE 0', 1], [-30, '1 µW', 0], [-85, 'chuẩn −85', 0], [-100, 'nhạy −100', 1], [-111, 'kTB −111', 2]];
+  ctx.font = '10px ' + c.mono;
+  marks.forEach(([x, t, row]) => {
+    Viz.line(ctx, f.X(x), f.y0 + 4, f.X(x), f.y1, c.faint, [2, 3]);
+    Viz.label(ctx, t, f.X(x) + (x < -105 ? -2 : 3), f.y0 + 14 + row * 11, c.muted, x < -105 ? 'left' : x > 10 ? 'right' : 'left');
+  });
+  const sum = RF.addDbm(p.p1, p.p2);
+  const tri = (x, col, y) => { ctx.beginPath(); ctx.moveTo(f.X(x), y); ctx.lineTo(f.X(x) - 6, y + 11); ctx.lineTo(f.X(x) + 6, y + 11); ctx.closePath(); ctx.fillStyle = col; ctx.fill(); };
+  tri(p.p1, c.accent, f.y0 + 56); tri(p.p2, c.indigo, f.y0 + 56); tri(sum, c.green, f.y0 + 70);
+  const diff = p.p1 - p.p2;
+  const ratio = RF.fromDb(Math.abs(diff));
+  return {
+    sum: `${Fmt.n(sum, 2)} dBm = ${Fmt.power(RF.dbmToMw(sum))}`,
+    diff: `${Fmt.n(diff, 0)} dB`,
+    ratio: diff === 0 ? '1 lần' : (ratio >= 1e4 || ratio < 0.01 ? ratio.toExponential(1).replace('e+', ' × 10^') : ratio.toFixed(ratio < 10 ? 2 : 0)) + ' lần',
+    msg: Math.abs(diff) >= 10 ? `Hai tín hiệu hơn kém ${Math.abs(diff)} dB: tín hiệu yếu chỉ thêm ${Fmt.n(sum - Math.max(p.p1, p.p2), 2)} dB vào tổng.` : `Tổng lớn hơn tín hiệu mạnh hơn ${Fmt.n(sum - Math.max(p.p1, p.p2), 2)} dB.`,
+  };
+});
+
+// ---------- 3. Suy hao ----------
+Viz.sim('sim-pl', {
+  ptx: (v) => Fmt.pl(v, 0) + ' dBm', s: (v) => Fmt.n(v, 0) + ' dBm', n: (v) => v.toFixed(1), walls: (v) => v, lw: (v) => v + ' dB',
+}, (p, [v], c) => {
+  const wl = p.walls * p.lw;
+  const rx = (d, n, w) => p.ptx - RF.pathLoss(d, n) - w;
+  const f = Ch.frame(v, c, { title: 'Mức thu theo khoảng cách', sub: 'mỗi lần nhân đôi mất 3·N dB', xmin: 1, xmax: 300, xlog: true, ymin: -130, ymax: 20,
+    xt: [1, 3, 10, 30, 100, 300], xf: (t) => t + ' m', yt: [-120, -90, -60, -30, 0], yf: (t) => Fmt.n(t, 0), xlabel: 'khoảng cách (log)' });
+  f.clip();
+  const curve = (n, w, col, width, dash) => { const pts = []; for (let i = 0; i <= 80; i++) { const d = Math.pow(300, i / 80); pts.push([d, rx(d, n, w)]); } Viz.polyline(v.ctx, pts.length, (i) => f.X(pts[i][0]), (i) => f.Y(pts[i][1]), col, width, dash); };
+  curve(2, 0, c.faint, 1.5, [5, 4]);
+  curve(p.n, wl, c.accent, 2);
+  Viz.line(v.ctx, f.x0, f.Y(p.s), f.x1, f.Y(p.s), c.green, [5, 4], 1.5);
+  f.restore();
+  const r1 = RF.rangeM(p.ptx - p.s - wl, p.n), r0 = RF.rangeM(p.ptx - p.s, 2);
+  if (r1 >= 1 && r1 <= 300) { Viz.line(v.ctx, f.X(r1), f.y0, f.X(r1), f.y1, c.accent, [2, 3]); Viz.dot(v.ctx, f.X(r1), f.Y(p.s), 4, c.accent); }
+  if (r0 >= 1 && r0 <= 300) Viz.line(v.ctx, f.X(r0), f.y0, f.X(r0), f.y1, c.faint, [2, 3]);
+  return {
+    pl10: Fmt.db(RF.pathLoss(10, p.n) + wl), rx10: Fmt.dbm(rx(10, p.n, wl)), r1: r1 < 1 ? 'dưới 1 m' : Fmt.m(r1), r0: Fmt.m(r0),
+    msg: `Ngân sách ${Fmt.db(p.ptx - p.s)} trừ tường ${Fmt.db(wl, 0)} còn ${Fmt.db(p.ptx - p.s - wl)} để tiêu vào khoảng cách.`,
+  };
+});
+
+// ---------- 4. Tiếng ồn và độ nhạy ----------
+(() => {
+  const PRESETS = { '154': { bw: '2000', nf: 4, snr: 1.6 }, ble: { bw: '1000', nf: 5, snr: 12 } };
+  const root = document.getElementById('sim-noise');
+  const q = (n) => root.querySelector(`[name="${n}"]`);
+  const preset = q('preset');
+  const apply = () => {
+    const pr = PRESETS[preset.value];
+    if (!pr) return;
+    q('bw').value = pr.bw; q('nf').value = pr.nf; q('snr').value = pr.snr;
+  };
+  preset.addEventListener('change', () => { apply(); preset.dispatchEvent(new Event('input')); });
+  ['bw', 'nf', 'snr'].forEach((n) => q(n).addEventListener('input', (e) => { if (e.isTrusted) preset.value = 'custom'; }));
+  Viz.sim('sim-noise', { nf: (v) => v.toFixed(1) + ' dB', snr: (v) => v.toFixed(1) + ' dB' }, (p, [v], c) => {
+    const bw = +p.bw * 1e3, ktb = RF.noiseDbm(bw), fl = ktb + p.nf, sens = RF.sensitivity(bw, p.nf, p.snr);
+    Ch.waterfall(v, c, {
+      title: 'Từ tạp âm nhiệt tới độ nhạy (dBm)', sub: `băng thông ${(+p.bw / 1000).toFixed(2).replace(/\.?0+$/, '')} MHz`, ymin: -125, ymax: -75, yt: [-120, -110, -100, -90, -80],
+      steps: [
+        { label: 'kTB\n(nhiệt)', kind: 'abs', value: ktb, color: c.faint },
+        { label: '+ NF', kind: 'delta', value: p.nf, color: c.ochre },
+        { label: '+ SNR\ntối thiểu', kind: 'delta', value: p.snr, color: c.ochre },
+        { label: 'Độ nhạy', kind: 'abs', value: sens, color: c.green },
+      ],
+      lines: [{ y: -85, text: 'chuẩn −85', color: c.accent }],
+    });
+    const d = -85 - sens;
+    return { ktb: Fmt.dbm(ktb), sens: Fmt.dbm(sens), vs85: (d >= 0 ? 'nhạy hơn ' : 'kém hơn ') + Fmt.db(Math.abs(d)), msg: `NF + SNR cộng thêm ${Fmt.db(p.nf + p.snr)} lên trên sàn nhiệt.` };
+  });
+})();
+
+// ---------- 5. Đường cong PER ----------
+Viz.sim('sim-per', { m: (v) => Fmt.pl(v, 1) + ' dB' }, (p, [v], c) => {
+  const f = Ch.frame(v, c, { title: 'PER theo biên so với độ nhạy', sub: 'PER = 1% tại 0 dB, 50% tại −2.5 dB', xmin: -8, xmax: 8, ymin: 0, ymax: 100,
+    xt: [-8, -4, 0, 4, 8], xf: (t) => Fmt.pl(t, 0), yt: [0, 25, 50, 75, 100], yf: (t) => t + '%', xlabel: 'mức thu − độ nhạy (dB)' });
+  const pts = []; for (let i = 0; i <= 160; i++) { const m = -8 + i / 10; pts.push([m, RF.per(m) * 100]); }
+  Viz.polyline(v.ctx, pts.length, (i) => f.X(pts[i][0]), (i) => f.Y(pts[i][1]), c.indigo, 2);
+  Viz.line(v.ctx, f.X(0), f.y0, f.X(0), f.y1, c.green, [4, 4]);
+  const per = RF.per(p.m);
+  Viz.line(v.ctx, f.X(p.m), f.y1, f.X(p.m), f.Y(per * 100), c.accent, [2, 3]);
+  Viz.dot(v.ctx, f.X(p.m), f.Y(per * 100), 5, c.accent);
+  const att = 1 / (1 - Math.min(per, 0.9999));
+  return { per: Fmt.pct(per, 1), lost: Math.round(per * 100) + ' gói', att: att.toFixed(2), msg: per < 0.02 ? 'Trên độ nhạy: gần như gói nào cũng tới.' : per > 0.5 ? '<span class="bad">Dưới vách:</span> quá nửa số gói rớt.' : 'Đang ở sườn dốc của đường cong.' };
+});
+
+// ---------- 6. Công suất phát ----------
+Viz.sim('sim-tx', { ptx: (v) => Fmt.pl(v, 0) + ' dBm', n: (v) => v.toFixed(1), eta: (v) => v + '%' }, (p, [v], c) => {
+  const BASE = 8, VDD = 3;                                                // mA nền, V (ví dụ)
+  const cur = (dbm) => BASE + RF.dbmToMw(dbm) / (p.eta / 100) / VDD;      // mW / V = mA
+  const iRatio = (dbm) => cur(dbm) / cur(0), rRatio = (dbm) => RF.rangeGain(dbm, p.n);
+  const f = Ch.frame(v, c, { title: 'So với 0 dBm (trục tung logarit)', sub: 'dòng tăng nhanh, tầm xa tăng chậm', xmin: -20, xmax: 20, ymin: -1.5, ymax: 2, xt: [-20, -10, 0, 10, 20], xf: (t) => Fmt.pl(t, 0),
+    yt: [-1, 0, 1, 2], yf: (t) => (t === -1 ? '÷10' : t === 0 ? '×1' : '×' + Math.pow(10, t)), xlabel: 'công suất phát (dBm)' });
+  const curve = (fn, col) => { const pts = []; for (let i = 0; i <= 80; i++) { const x = -20 + i * 0.5; pts.push([x, Math.log10(fn(x))]); } Viz.polyline(v.ctx, pts.length, (i) => f.X(pts[i][0]), (i) => f.Y(pts[i][1]), col, 2); };
+  curve(iRatio, c.accent); curve(rRatio, c.indigo);
+  Viz.line(v.ctx, f.x0, f.Y(0), f.x1, f.Y(0), c.faint, [3, 3]);
+  Viz.dot(v.ctx, f.X(p.ptx), f.Y(Math.log10(iRatio(p.ptx))), 5, c.accent);
+  Viz.dot(v.ctx, f.X(p.ptx), f.Y(Math.log10(rRatio(p.ptx))), 5, c.indigo);
+  return {
+    mw: Fmt.power(RF.dbmToMw(p.ptx)), ma: cur(p.ptx).toFixed(1) + ' mA', ir: '×' + iRatio(p.ptx).toFixed(iRatio(p.ptx) < 10 ? 2 : 1), rr: '×' + rRatio(p.ptx).toFixed(2),
+    msg: `Dòng nền ${BASE} mA + công suất RF ÷ (hiệu suất ${p.eta}% × ${VDD} V): đều là số minh hoạ.`,
+  };
+});
+
+// ---------- 7. Link budget ----------
+(() => {
+  const NODES = { t: { tx: 10, s: -101, name: 'node thường' }, a: { tx: 20, s: -102, name: 'Competitor A' }, sl: { tx: 19.5, s: -105.4, name: 'Silicon Labs' } };
+  const slide = { 'sl,sl': 185.1, 'a,a': 156.6, 'sl,t': 107.1, 'a,t': 83.2 };
+  Viz.sim('sim-lb', { xtx: (v) => Fmt.pl(v, 1) + ' dBm', xs: (v) => Fmt.n(v, 1) + ' dBm', n: (v) => v.toFixed(1) }, (p, [v], c, s) => {
+    const X = { tx: p.xtx, s: p.xs }, Y = NODES[p.y];
+    const l = RF.link(X, Y);
+    const range = (lb) => RF.rangeM(lb, p.n, RF.SLIDE_C);
+    const { ctx, w, h } = v;
+    Viz.title(v, c, 'Ngân sách từng chiều (dB)', 'chiều yếu quyết định');
+    const x0 = 120, x1 = w - 60, lo = 90, hi = 135;
+    const X_ = (val) => x0 + (val - lo) / (hi - lo) * (x1 - x0);
+    ctx.font = '10px ' + c.mono;
+    [[l.ab, 'X → Y', 'X phát, Y nghe', 40], [l.ba, 'Y → X', 'Y phát, X nghe', 92]].forEach(([val, a, b, y]) => {
+      const weak = val === l.limit;
+      Viz.label(ctx, a, 8, y + 10, c.text, 'left');
+      Viz.label(ctx, b, 8, y + 24, c.muted, 'left');
+      Viz.rect(ctx, x0, y, X_(val) - x0, 22, weak ? c.accent : c.indigo);
+      Viz.label(ctx, Fmt.n(val, 1) + ' dB', Math.min(X_(val) + 4, w - 52), y + 15, c.text, 'left');
+    });
+    Viz.line(ctx, X_(l.limit), 32, X_(l.limit), 122, c.text, [3, 3]);
+    Viz.label(ctx, 'giới hạn', X_(l.limit), 28, c.muted, 'center');
+    for (let t = lo; t <= hi; t += 5) { Viz.line(ctx, X_(t), 126, X_(t), 130, c.faint); if (t % 10 === 0) Viz.label(ctx, String(t), X_(t), 141, c.muted, 'center'); }
+    // bảng các cặp
+    const pairs = [['sl', 'sl'], ['a', 'a'], ['sl', 't'], ['a', 't'], ['t', 't']];
+    const rows = pairs.map(([a, b]) => {
+      const lk = RF.link(NODES[a], NODES[b]), r = range(lk.limit), sl = slide[a + ',' + b];
+      const ok = sl && Math.abs(r - sl) < 0.15;
+      const cls = sl && p.n === 4 ? (ok ? 'ok' : 'bad') : '';            // slide chỉ tính cho N = 4
+      return `<tr><td class="row">${NODES[a].name} ↔ ${NODES[b].name}</td><td>${lk.ab.toFixed(1)}</td><td>${lk.ba.toFixed(1)}</td><td>${lk.limit.toFixed(1)}</td><td class="${cls}">${r.toFixed(1)} m</td><td>${sl ? sl + ' m' : '–'}</td></tr>`;
+    }).join('');
+    s.root.querySelector('[data-out="tbl"]').innerHTML = `<thead><tr><th class="row">Cặp (N đang chọn)</th><th>→ dB</th><th>← dB</th><th>giới hạn</th><th>tầm xa</th><th>slide ghi</th></tr></thead><tbody>${rows}</tbody>`;
+    const lim = l.ab <= l.ba ? 'X phát, Y nghe' : 'Y phát, X nghe';
+    return { range: range(l.limit).toFixed(1) + ' m', weak: lim, msg: `Cả hai chiều phải đạt: chiều yếu là ${l.limit.toFixed(1)} dB (${lim}). Hằng số C = ${RF.SLIDE_C} dB suy ra từ slide, N chọn ở thanh trượt.` };
+  });
+})();
+
+// ---------- 8. dB sang mét ----------
+Viz.sim('sim-dbr', { db: (v) => '+' + v.toFixed(1) + ' dB', n: (v) => v.toFixed(1) }, (p, [v], c, s) => {
+  const g = RF.rangeGain(p.db, p.n), a = g * g;
+  const { ctx, w, h } = v;
+  Viz.title(v, c, 'Vùng phủ trước và sau', `N = ${p.n.toFixed(1)}`);
+  const cx = w / 2, cy = h / 2 + 8, R = Math.min(w / 2 - 20, h / 2 - 22), r0 = R / g;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Viz.TAU); ctx.fillStyle = c.accent; ctx.globalAlpha = 0.18; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = c.accent; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r0, 0, Viz.TAU); ctx.fillStyle = c.indigo; ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = c.indigo; ctx.stroke();
+  Viz.dot(ctx, cx, cy, 3, c.text);
+  ctx.font = '11px ' + c.mono;
+  Viz.label(ctx, 'trước: bán kính 1', cx + r0 * 0.72 + 4, cy - r0 * 0.72, c.indigo, 'left');
+  Viz.label(ctx, 'sau: ' + g.toFixed(2), cx + R * 0.72 + 4 > w - 90 ? cx - R * 0.72 - 4 : cx + R * 0.72 + 4, cy + R * 0.72 + 12, c.accent, cx + R * 0.72 + 4 > w - 90 ? 'right' : 'left');
+  const rowsN = [2, 3, 4], dbs = [1, 3, 6, 7.3, 10, 12];
+  s.root.querySelector('[data-out="tbl"]').innerHTML = `<thead><tr><th class="row">Thêm vào ngân sách</th>${rowsN.map((n) => `<th>N = ${n}: tầm xa / diện tích</th>`).join('')}</tr></thead><tbody>${dbs.map((d) => `<tr><td class="row">${d} dB</td>${rowsN.map((n) => `<td>×${RF.rangeGain(d, n).toFixed(2)} / ×${(RF.rangeGain(d, n) ** 2).toFixed(2)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  return { rg: '×' + g.toFixed(2), ag: '×' + a.toFixed(2), msg: `Tầm xa nhân 10^(${p.db.toFixed(1)}/(10·${p.n.toFixed(1)})) = ${g.toFixed(3)}; diện tích là bình phương: ${a.toFixed(3)}.` };
+});
+
+// ---------- 9. Mesh ----------
+Viz.sim('sim-mesh', { r: (v) => v + ' m', p: (v) => v + '%' }, (p, [v], c) => {
+  const nd = RF.houseNodes(), H = RF.HOUSE;
+  const path = RF.meshPath(p.r);
+  const { ctx, w, h } = v;
+  Viz.title(v, c, 'Mặt bằng 60 m × 30 m', `tầm xa mỗi liên kết ${p.r} m`);
+  const sc = Math.min((w - 24) / H.w, (h - 36) / H.h), ox = (w - H.w * sc) / 2, oy = 22 + (h - 28 - H.h * sc) / 2;
+  const P = (n) => [ox + n[0] * sc, oy + n[1] * sc];
+  Viz.rect(ctx, ox, oy, H.w * sc, H.h * sc, null, c.faint);
+  // tất cả liên kết trong tầm: nét mảnh
+  for (let i = 0; i < nd.length; i++) for (let j = i + 1; j < nd.length; j++) {
+    if (Math.hypot(nd[i][0] - nd[j][0], nd[i][1] - nd[j][1]) <= p.r) { const a = P(nd[i]), b = P(nd[j]); Viz.line(ctx, a[0], a[1], b[0], b[1], c.border); }
+  }
+  if (path) for (let i = 1; i < path.length; i++) { const a = P(nd[path[i - 1]]), b = P(nd[path[i]]); Viz.line(ctx, a[0], a[1], b[0], b[1], c.accent, null, 2.5); }
+  nd.forEach((n, i) => {
+    const [x, y] = P(n);
+    const col = i === 0 ? c.green : i === nd.length - 1 ? c.indigo : c.faint;
+    if (i === 0) Viz.rect(ctx, x - 6, y - 6, 12, 12, col); else Viz.dot(ctx, x, y, i === nd.length - 1 ? 6 : 4, col);
+  });
+  const hops = path ? path.length - 1 : 0;
+  const ok = path ? Math.pow(p.p / 100, hops) : 0;
+  return {
+    hops: path ? hops : 'không nối được', ok: path ? Fmt.pct(ok, 1) : '0%', tx: path ? hops + ' (mỗi hop một lần phát)' : '–',
+    msg: path ? `Đường ít hop nhất: ${hops} hop; ${hops} lần nhân với ${p.p}% còn ${Fmt.pct(ok, 1)}.` : '<span class="bad">Mạng đứt:</span> không có đường nào từ thiết bị tới hub với tầm xa này.',
+  };
+});
+  </script>
+  <script>
+/* Mô phỏng các mục 10 đến 14: băng 2.4 GHz, chuỗi thu, bảng blocking, blocker ngoài đời, thử lại. */
+
+// ---------- 10. Băng 2.4 GHz ----------
+Viz.sim('sim-band', { zc: (v) => 'kênh ' + v, pb: (v) => Fmt.n(v, 0) + ' dBm' }, (p, [v], c) => {
+  const S0 = -101;
+  const { ctx, w, h } = v;
+  Viz.title(v, c, 'Băng 2.4 GHz', '2400 đến 2484 MHz');
+  const x0 = 56, x1 = w - 10, X = (f) => x0 + (f - 2400) / 84 * (x1 - x0);
+  const wifi = [[1, p.w1], [6, p.w6], [11, p.w11]].filter((a) => a[1]).map((a) => RF.wifiMHz(a[0]));
+  const dMin = (f) => (wifi.length ? Math.min(...wifi.map((fc) => Math.abs(f - fc))) : Infinity);
+  const clear = (ch) => dMin(RF.zigbeeMHz(ch)) >= 12;
+  ctx.font = '10px ' + c.mono;
+  // trục
+  const yAxis = h - 22;
+  Viz.line(ctx, x0, yAxis, x1, yAxis, c.faint);
+  for (let f = 2400; f <= 2480; f += 20) { Viz.line(ctx, X(f), yAxis, X(f), yAxis + 4, c.faint); Viz.label(ctx, String(f), X(f), yAxis + 15, c.muted, 'center'); }
+  // làn Wi-Fi
+  Viz.label(ctx, 'Wi-Fi', 6, 66, c.muted, 'left');
+  [[1, p.w1], [6, p.w6], [11, p.w11]].forEach(([n, on]) => {
+    if (!on) return;
+    const fc = RF.wifiMHz(n);
+    ctx.beginPath(); ctx.moveTo(X(fc - 11), 100); ctx.lineTo(X(fc - 9), 36); ctx.lineTo(X(fc + 9), 36); ctx.lineTo(X(fc + 11), 100); ctx.closePath();
+    ctx.fillStyle = c.ochre; ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = c.ochre; ctx.lineWidth = 1.5; ctx.stroke();
+    Viz.label(ctx, 'kênh ' + n, X(fc), 56, c.text, 'center');
+    Viz.label(ctx, fc + '', X(fc), 70, c.muted, 'center');
+  });
+  // làn 802.15.4
+  Viz.label(ctx, '802.15.4', 6, 156, c.muted, 'left');
+  for (let ch = 11; ch <= 26; ch++) {
+    const f = RF.zigbeeMHz(ch), sel = ch === p.zc;
+    const col = sel ? c.accent : clear(ch) ? c.green : c.faint;
+    Viz.rect(ctx, X(f - 1), 128, Math.max(3, X(f + 1) - X(f - 1)), 44, col);
+    ctx.font = (sel ? '600 ' : '') + '9px ' + c.mono;
+    Viz.label(ctx, String(ch), X(f), 186, sel ? c.accent : c.muted, 'center');
+  }
+  ctx.font = '10px ' + c.mono;
+  // làn BLE
+  Viz.label(ctx, 'BLE', 6, 236, c.muted, 'left');
+  for (let k = 0; k < 40; k++) {
+    const f = 2402 + 2 * k, adv = f === 2402 || f === 2426 || f === 2480;
+    Viz.line(ctx, X(f), adv ? 214 : 224, X(f), 244, adv ? c.indigo : c.faint, null, adv ? 2.5 : 1);
+  }
+  [[2402, '37'], [2426, '38'], [2480, '39']].forEach(([f, t]) => Viz.label(ctx, t, X(f), 208, c.indigo, 'center'));
+  // chỉ số của kênh đang chọn
+  const f = RF.zigbeeMHz(p.zc);
+  const leaks = wifi.map((fc) => p.pb - RF.rejection(f - fc));
+  const seff = leaks.length ? RF.addDbm(S0, ...leaks) : S0;
+  const cl = [];
+  for (let ch = 11; ch <= 26; ch++) if (clear(ch)) cl.push(ch);
+  const near = dMin(f);
+  return {
+    f: f + ' MHz', df: wifi.length ? Fmt.n(near, 0) + ' MHz' : 'không có Wi-Fi', seff: Fmt.dbm(seff) + (wifi.length ? ` (gốc ${Fmt.n(S0, 0)})` : ''), clear: cl.length ? cl.join(', ') : 'không có',
+    msg: !wifi.length ? 'Không có Wi-Fi: mọi kênh sạch, độ nhạy là độ nhạy gốc.' : seff - S0 > 10 ? `<span class="bad">Kênh ${p.zc} bị Wi-Fi ăn mất ${Fmt.db(seff - S0)} độ nhạy</span> ở blocker ${Fmt.n(p.pb, 0)} dBm.` : `Kênh ${p.zc} chỉ mất ${Fmt.db(seff - S0)} độ nhạy ở blocker ${Fmt.n(p.pb, 0)} dBm.`,
+  };
+});
+
+// ---------- 11. Chuỗi thu ----------
+Viz.sim('sim-chain', { pb: (v) => Fmt.n(v, 0) + ' dBm', df: (v) => v.toFixed(1) + ' MHz', sig: (v) => Fmt.n(v, 0) + ' dBm', k: (v) => v.toFixed(1) + ' dB/MHz', knee: (v) => Fmt.n(v, 0) + ' dBm' }, (p, [v], c) => {
+  const S0 = -102;
+  const R = Math.min(90, p.k * Math.max(0, p.df - 1));
+  const leak = p.pb - R;
+  const lin = RF.addDbm(S0, leak);
+  const extra = p.comp ? Math.max(0, p.pb - p.knee) : 0;
+  const seff = lin + extra;
+  const f = Ch.frame(v, c, { title: 'Phổ quanh kênh cần nghe', sub: 'trục ngang: lệch tần so với kênh đang nghe', xmin: -8, xmax: 48, ymin: -110, ymax: 5, xt: [0, 10, 20, 30, 40], xf: (t) => (t > 0 ? '+' + t : String(t)) + ' MHz',
+    yt: [-100, -80, -60, -40, -20, 0], yf: (t) => Fmt.n(t, 0), m: { l: 40, r: 10, t: 24, b: 28 } });
+  const { ctx } = v;
+  f.clip();
+  // blocker (Wi-Fi 20 MHz)
+  ctx.fillStyle = c.accent; ctx.globalAlpha = 0.35; ctx.fillRect(f.X(p.df - 10), f.Y(p.pb), f.X(p.df + 10) - f.X(p.df - 10), f.Y(-110) - f.Y(p.pb)); ctx.globalAlpha = 1;
+  ctx.strokeStyle = c.accent; ctx.lineWidth = 1.5; ctx.strokeRect(f.X(p.df - 10), f.Y(p.pb), f.X(p.df + 10) - f.X(p.df - 10), f.Y(-110) - f.Y(p.pb));
+  // tín hiệu cần nghe
+  ctx.fillStyle = c.indigo; ctx.fillRect(f.X(-1), f.Y(p.sig), f.X(1) - f.X(-1), f.Y(-110) - f.Y(p.sig));
+  // vạch độ nhạy
+  Viz.line(ctx, f.x0, f.Y(S0), f.x1, f.Y(S0), c.green, [5, 4], 1.5);
+  Viz.line(ctx, f.x0, f.Y(seff), f.x1, f.Y(seff), c.accent, [5, 4], 1.5);
+  f.restore();
+  // mũi tên rò: từ đỉnh blocker xuống kênh
+  Viz.line(ctx, f.X(p.df), f.Y(p.pb), f.X(0), f.Y(Math.max(-108, leak)), c.ochre, [3, 3], 1.5);
+  Viz.line(ctx, f.X(-1.5), f.Y(Math.max(-108, leak)), f.X(1.5), f.Y(Math.max(-108, leak)), c.ochre, null, 3);
+  ctx.font = '10px ' + c.mono;
+  Viz.label(ctx, 'S gốc', f.x0 + 4, f.Y(S0) + 11, c.green, 'left');
+  Viz.label(ctx, 'S hiệu dụng', f.x1 - 4, f.Y(seff) - 4, c.accent, 'right');
+  Viz.label(ctx, '−R = ' + R.toFixed(1) + ' dB', (f.X(p.df) + f.X(0)) / 2 + 6, (f.Y(p.pb) + f.Y(Math.max(-108, leak))) / 2 - 4, c.ochre, 'left');
+  const heard = p.sig >= seff;
+  return {
+    R: Fmt.db(R), leak: Fmt.dbm(leak), extra: p.comp ? '+' + extra.toFixed(1) + ' dB' : 'tắt', seff: Fmt.dbm(seff),
+    msg: heard ? `<span class="good">Nghe được:</span> tín hiệu ${Fmt.dbm(p.sig, 0)} cao hơn độ nhạy hiệu dụng ${Fmt.db(p.sig - seff)}.` : `<span class="bad">Không nghe được:</span> tín hiệu thấp hơn độ nhạy hiệu dụng ${Fmt.db(seff - p.sig)}.`,
+  };
+});
+
+// ---------- 12. Bảng blocking ----------
+Viz.sim('sim-table', { n: (v) => v.toFixed(1) }, (p, [v], c, s) => {
+  const S0 = -102, col = +p.col;
+  const CH = [['xG24', 'xG24', c.green], ['xG301', 'xG301', c.indigo], ['A', 'Competitor A', c.accent], ['B', 'Competitor B', c.ochre]];
+  const B = RF.BLOCK;
+  const f = Ch.frame(v, c, { title: `Độ nhạy khi có blocker Wi-Fi, ${col ? '22.5' : '12.5'} MHz từ tâm`, sub: 'nét đứt: chỉ rò qua bộ lọc', xmin: -45, xmax: -5, ymin: -105, ymax: -25,
+    xt: [-40, -30, -20, -10], xf: (t) => t + ' dBm', yt: [-100, -80, -60, -40], yf: (t) => Fmt.n(t, 0), xlabel: 'mức blocker', m: { l: 40, r: 16, t: 24, b: 30 } });
+  const { ctx } = v;
+  const rows = [];
+  CH.forEach(([k, name, col2]) => {
+    const s40 = B['-40'][k][col], s10 = B['-10'][k][col];
+    const R = -40 - RF.toDb(RF.fromDb(s40) - RF.fromDb(S0));
+    const pred = (x) => RF.addDbm(S0, x - R);
+    const pts = []; for (let x = -45; x <= -5; x += 1) pts.push([x, pred(x)]);
+    Viz.polyline(ctx, pts.length, (i) => f.X(pts[i][0]), (i) => f.Y(pts[i][1]), col2, 1.5, [4, 4]);
+    Viz.line(ctx, f.X(-40), f.Y(s40), f.X(-10), f.Y(s10), col2, null, 2.5);
+    Viz.dot(ctx, f.X(-40), f.Y(s40), 4, col2); Viz.dot(ctx, f.X(-10), f.Y(s10), 4, col2);
+    rows.push({ name, col2, s40, s10, up: s10 - s40, excess: s10 - pred(-10), d40: s40 - B['-40'].xG24[col], d10: s10 - B['-10'].xG24[col] });
+  });
+  const keep = (d) => (100 * Math.pow(10, -d / (10 * p.n))).toFixed(d === 0 ? 0 : 1) + '%';
+  s.root.querySelector('[data-out="tbl"]').innerHTML = `<thead><tr><th class="row">Chip</th><th>S ở −40</th><th>S ở −10</th><th>tụt khi blocker +30 dB</th><th>vượt đường rò</th><th>delta −40</th><th>tầm xa còn</th><th>delta −10</th><th>tầm xa còn</th></tr></thead><tbody>${rows.map((r) =>
+    `<tr><td class="row">${r.name}</td><td>${r.s40.toFixed(1)}</td><td>${r.s10.toFixed(1)}</td><td>${r.up.toFixed(1)}</td><td class="${r.excess > 3 ? 'bad' : 'ok'}">${r.excess >= 0 ? '+' : ''}${r.excess.toFixed(1)}</td><td>${r.d40.toFixed(1)}</td><td>${keep(r.d40)}</td><td>${r.d10.toFixed(1)}</td><td>${keep(r.d10)}</td></tr>`).join('')}</tbody>`;
+  const worst = rows.reduce((a, b) => (b.excess > a.excess ? b : a));
+  return { msg: `Chip bị nén nhiều nhất ở mức −10 dBm: <b>${worst.name}</b> (vượt đường rò ${worst.excess.toFixed(1)} dB). "Tầm xa còn" tính so với xG24 với N = ${p.n.toFixed(1)}.` };
+});
+
+// ---------- 13. Blocker ngoài đời ----------
+Viz.sim('sim-field', { pw: (v) => Fmt.pl(v, 0) + ' dBm', dw: (v) => v.toFixed(1) + ' m', iso: (v) => v + ' dB' }, (p, [v], c) => {
+  const pb = p.src === 'router' ? p.pw - RF.fspl(p.dw, 2.44e9) : p.pw - p.iso;
+  const { ctx } = v;
+  const f = Ch.frame(v, c, { title: 'Mức blocker tại thiết bị (dBm)', sub: 'hai hàng của bảng đo: −40 và −10', xmin: -60, xmax: 10, ymin: 0, ymax: 1, xt: [-60, -50, -40, -30, -20, -10, 0, 10], xf: (t) => Fmt.n(t, 0), m: { l: 14, r: 14, t: 24, b: 26 } });
+  ctx.font = '10px ' + c.mono;
+  [[-40, 'bảng −40: cả nhà'], [-10, 'bảng −10: sát nách']].forEach(([x, t]) => { Viz.line(ctx, f.X(x), f.y0 + 4, f.X(x), f.y1, c.faint, [3, 3]); Viz.label(ctx, t, f.X(x) + (x > -20 ? -4 : 4), f.y0 + 16, c.muted, x > -20 ? 'right' : 'left'); });
+  if (p.src === 'router') [0.3, 1, 3, 9, 20].forEach((d) => { const lv = p.pw - RF.fspl(d, 2.44e9); if (lv >= -60 && lv <= 10) { Viz.line(ctx, f.X(lv), f.y1 - 6, f.X(lv), f.y1, c.muted); Viz.label(ctx, d + ' m', f.X(lv), f.y1 - 9, c.muted, 'center'); } });
+  const x = Math.max(-60, Math.min(10, pb));
+  ctx.beginPath(); ctx.moveTo(f.X(x), f.y1 - 28); ctx.lineTo(f.X(x) - 7, f.y1 - 14); ctx.lineTo(f.X(x) + 7, f.y1 - 14); ctx.closePath(); ctx.fillStyle = c.accent; ctx.fill();
+  Viz.line(ctx, f.X(x), f.y0 + 22, f.X(x), f.y1 - 28, c.accent, null, 2);
+  const seff = RF.effSens(-102, pb, RF.rejection(22.5));
+  const row = pb >= -5 ? 'mạnh hơn cả hàng −10 dBm' : pb >= -15 ? 'hàng −10 dBm' : pb > -30 ? 'giữa hai hàng' : pb >= -45 ? 'hàng −40 dBm' : 'yếu hơn hàng −40 dBm';
+  return {
+    pb: Fmt.dbm(pb), row, seff: Fmt.dbm(seff), loss: Fmt.db(seff - -102),
+    msg: p.src === 'router' ? `Router +${p.pw} dBm cách ${p.dw.toFixed(1)} m: suy hao không gian tự do ${Fmt.db(RF.fspl(p.dw, 2.44e9))}.` : `Radio Wi-Fi cùng thiết bị: +${p.pw} dBm trừ cách ly ${p.iso} dB.`,
+  };
+});
+
+// ---------- 14. Thử lại và OTA ----------
+Viz.sim('sim-retry', { per: (v) => v + '%', ret: (v) => v }, (p, [v], c) => {
+  const FR = Math.ceil(256 * 1024 / 100), T = 0.006;
+  const ota = (q) => FR * T / (1 - q);
+  const f = Ch.frame(v, c, { title: 'Thời gian cập nhật 256 KiB theo PER', sub: `${FR} gói, mỗi lần phát ${T * 1000} ms`, xmin: 0, xmax: 90, ymin: 0, ymax: 160, xt: [0, 20, 40, 60, 80], xf: (t) => t + '%', yt: [0, 40, 80, 120, 160], yf: (t) => t + ' s', xlabel: 'tỉ lệ gói lỗi (PER)' });
+  const pts = []; for (let q = 0; q <= 90; q += 1) pts.push([q, ota(q / 100)]);
+  Viz.polyline(v.ctx, pts.length, (i) => f.X(pts[i][0]), (i) => f.Y(pts[i][1]), c.indigo, 2);
+  Viz.line(v.ctx, f.x0, f.Y(ota(0)), f.x1, f.Y(ota(0)), c.green, [4, 4]);
+  const q = p.per / 100;
+  Viz.dot(v.ctx, f.X(p.per), f.Y(ota(q)), 5, c.accent);
+  const dropP = Math.pow(q, p.ret + 1);
+  return {
+    att: RF.expAttempts(q, 99).toFixed(2), ota: ota(q).toFixed(1) + ' s' + (q ? ` (gốc ${ota(0).toFixed(1)} s)` : ''), drop: Fmt.pct(dropP, 2) + ` (${Math.round(FR * dropP)} gói)`, en: '×' + RF.expAttempts(q, 99).toFixed(2),
+    msg: `Mỗi gói thành công tốn trung bình 1/(1 − ${q.toFixed(2)}) = ${RF.expAttempts(q, 99).toFixed(2)} lần phát. Các gói bị bỏ sau ${p.ret} lần thử lại sẽ do tầng ứng dụng gửi lại.`,
+  };
+});
+  </script>
+  <script>
+/* Mô phỏng các mục 15 đến 19: multipath, hai ăng-ten, chọn ăng-ten trong preamble, phân cực, lợi ròng, ngân sách liên kết. */
+
+const LAMBDA_CM = RF.lambdaCm(2.44e9);                      // 12.29 cm
+
+// ---------- 15. Multipath ----------
+Viz.sim('sim-multi', { m: (v) => v, r: (v) => v.toFixed(2) }, (p, [v], c) => {
+  const f = Ch.frame(v, c, { title: 'Công suất thu dọc đường đi (dB so với chỉ có tia thẳng)', sub: `λ/2 = ${(LAMBDA_CM / 2).toFixed(1)} cm`, xmin: 0, xmax: 80, ymin: -30, ymax: 12,
+    xt: [0, 20, 40, 60, 80], xf: (t) => t + ' cm', yt: [-30, -20, -10, 0, 10], yf: (t) => Fmt.n(t, 0), xlabel: 'vị trí (cm)' });
+  const { ctx } = v;
+  for (let x = LAMBDA_CM / 2; x < 80; x += LAMBDA_CM / 2) Viz.line(ctx, f.X(x), f.y0, f.X(x), f.y1, c.border, [1, 4]);
+  // thống kê trên 3 m
+  const all = [];
+  for (let i = 0; i < 3000; i++) all.push(RF.multipath(i * 0.1, p.m, p.r, LAMBDA_CM));
+  const mean = RF.mean(all), meanDb = RF.toDb(mean);
+  const dB = (x) => Math.max(-40, RF.toDb(Math.max(x, 1e-4)));
+  f.clip();
+  Viz.line(ctx, f.x0, f.Y(meanDb), f.x1, f.Y(meanDb), c.green, [5, 4], 1.5);
+  const pts = []; for (let i = 0; i <= 400; i++) pts.push([i * 0.2, dB(RF.multipath(i * 0.2, p.m, p.r, LAMBDA_CM))]);
+  Viz.polyline(ctx, pts.length, (i) => f.X(pts[i][0]), (i) => f.Y(pts[i][1]), c.accent, 2);
+  f.restore();
+  Viz.label(ctx, 'trung bình', f.x0 + 4, f.Y(meanDb) + 12, c.green, 'left');
+  const db = all.map((x) => RF.toDb(Math.max(x, 1e-9)));
+  const below = (t) => db.filter((x) => x < meanDb + t).length / db.length;
+  return {
+    max: Fmt.db(Math.max(...db)), min: Fmt.db(Math.min(...db)), p10: Fmt.pct(below(-10), 1), p20: Fmt.pct(below(-20), 1),
+    msg: p.m === 0 ? 'Chỉ có tia thẳng: công suất không đổi theo vị trí.' : p.m === 1 ? `Sóng đứng: hố cách nhau λ/2 = ${(LAMBDA_CM / 2).toFixed(1)} cm, sâu (1 − ${p.r.toFixed(2)})² = ${Fmt.db(RF.toDb((1 - p.r) ** 2))} so với chỉ tia thẳng.` : `${p.m} đường phản xạ: hố và đỉnh lộn xộn. Rayleigh lý thuyết: 9.5% dưới −10 dB, 1.0% dưới −20 dB.`,
+  };
+});
+
+// ---------- 16. Antenna diversity ----------
+(() => {
+  const BASE = RF.fadingBase(20000, 0.93, 31415);
+  Viz.sim('sim-div', { d: (v) => `${v.toFixed(1)} cm = ${(v / LAMBDA_CM).toFixed(2)} λ`, mrg: (v) => v + ' dB' }, (p, [v], c) => {
+    const rho = RF.jakes(p.d / LAMBDA_CM);
+    const { p1, p2 } = RF.fadingFromBase(BASE, rho);
+    const th = RF.fromDb(-p.mrg), n = p1.length;
+    let c1 = 0, cb = 0;
+    for (let i = 0; i < n; i++) { if (p1[i] < th) c1++; if (Math.max(p1[i], p2[i]) < th) cb++; }
+    const f = Ch.frame(v, c, { title: 'Mức thu theo thời gian (dB so với trung bình)', sub: '300 mẫu đầu', xmin: 0, xmax: 300, ymin: -30, ymax: 10, xt: [0, 100, 200, 300], xf: (t) => String(t),
+      yt: [-30, -20, -10, 0, 10], yf: (t) => Fmt.n(t, 0), xlabel: 'thời gian (mẫu)' });
+    const { ctx } = v;
+    const y = (x) => f.Y(Math.max(-30, RF.toDb(Math.max(x, 1e-9))));
+    f.clip();
+    Viz.polyline(ctx, 300, (i) => f.X(i), (i) => y(p1[i]), c.indigo, 1.25);
+    Viz.polyline(ctx, 300, (i) => f.X(i), (i) => y(p2[i]), c.ochre, 1.25);
+    Viz.polyline(ctx, 300, (i) => f.X(i), (i) => y(Math.max(p1[i], p2[i])), c.accent, 2.25);
+    Viz.line(ctx, f.x0, f.Y(-p.mrg), f.x1, f.Y(-p.mrg), c.faint, [5, 4], 1.5);
+    for (let i = 0; i < 300; i++) {
+      if (p1[i] < th) Viz.line(ctx, f.X(i), f.y1 - 2, f.X(i), f.y1 - 9, c.indigo, null, 1.5);
+      if (Math.max(p1[i], p2[i]) < th) Viz.line(ctx, f.X(i), f.y1 - 11, f.X(i), f.y1 - 18, c.accent, null, 1.5);
+    }
+    f.restore();
+    ctx.font = '10px ' + c.mono;
+    Viz.label(ctx, 'ngưỡng', f.x1 - 4, f.Y(-p.mrg) - 4, c.muted, 'right');
+    return {
+      rho: (rho * rho).toFixed(3), o1: Fmt.pct(c1 / n, 1), ob: Fmt.pct(cb / n, 1),
+      msg: `Thống kê trên ${n} mẫu: một ăng-ten rớt ${Fmt.pct(c1 / n, 1)} thời gian, sau khi chọn ${Fmt.pct(cb / n, 1)}. Lý thuyết hai ăng-ten độc lập: ${Fmt.pct((1 - Math.exp(-th)) ** 2, 2)}.`,
+    };
+  });
+})();
+
+// ---------- 17. Preamble ----------
+Viz.sim('sim-pre', { off: (v) => v + ' µs', settle: (v) => v + ' µs', listen: (v) => v + ' µs', lock: (v) => v + ' µs' }, (p, [v], c) => {
+  const L = +p.pre, D = p.settle + p.listen, t0 = p.off % D;
+  const k = Math.max(0, Math.ceil((t0 - p.settle) / D));
+  const tEnd = t0 + L, td = (k + 1) * D, tdec = (k + 2) * D;
+  const best = tdec + p.settle + p.lock <= tEnd, first = td + p.lock <= tEnd, detected = td <= tEnd;
+  const worstBest = 3 * D - p.settle, needBest = 3 * D + p.lock, needFirst = 2 * D - p.settle + p.lock;
+  const { ctx, w } = v;
+  const Tmax = Math.max(tEnd, tdec + p.settle + p.lock) + 10;
+  const f = Ch.frame(v, c, { title: 'Hai ăng-ten luân phiên nghe và preamble', sub: 'trục ngang: µs', xmin: 0, xmax: Tmax, ymin: 0, ymax: 1,
+    xt: Tmax > 300 ? [0, 100, 200, 300, 400] : [0, 25, 50, 75, 100, 125, 150, 175, 200].filter((t) => t <= Tmax), xf: (t) => String(t), m: { l: 52, r: 10, t: 24, b: 28 } });
+  ctx.font = '10px ' + c.mono;
+  // hàng preamble
+  Viz.rect(ctx, f.X(t0), 34, f.X(tEnd) - f.X(t0), 24, null, c.accent);
+  ctx.fillStyle = c.accent; ctx.globalAlpha = 0.25; ctx.fillRect(f.X(t0), 34, f.X(tEnd) - f.X(t0), 24); ctx.globalAlpha = 1;
+  Viz.label(ctx, 'preamble ' + L + ' µs', Math.min(f.X(t0) + 4, w - 120), 50, c.text, 'left');
+  Viz.label(ctx, 'gói', 6, 50, c.muted, 'left');
+  // hai hàng ăng-ten
+  Viz.label(ctx, 'ăng-ten 0', 6, 90, c.muted, 'left'); Viz.label(ctx, 'ăng-ten 1', 6, 124, c.muted, 'left');
+  for (let s = 0; s * D < Tmax; s++) {
+    const a = s % 2, y = a ? 108 : 74, col = a ? c.ochre : c.indigo, xs = s * D;
+    ctx.globalAlpha = 0.25; ctx.fillStyle = col; ctx.fillRect(f.X(xs), y, f.X(Math.min(Tmax, xs + p.settle)) - f.X(xs), 24); ctx.globalAlpha = 1;
+    const xl = xs + p.settle, xe = Math.min(Tmax, xs + D);
+    if (xe > xl) { ctx.fillStyle = col; ctx.globalAlpha = (s === k || s === k + 1) ? 1 : 0.55; ctx.fillRect(f.X(xl), y, f.X(xe) - f.X(xl), 24); ctx.globalAlpha = 1; }
+  }
+  // mốc
+  const mark = (t, col, txt, row) => { Viz.line(ctx, f.X(t), 30, f.X(t), 176, col, [3, 3], 1.5); Viz.label(ctx, txt, f.X(t) + 3, 186 + row * 12, col, f.X(t) > w - 130 ? 'right' : 'left'); };
+  if (detected) mark(td, c.green, 'phát hiện', 0);
+  if (tdec <= tEnd) mark(tdec, c.accent, 'chọn tốt nhất', 1);
+  // vùng khóa tần số
+  const lockStart = best ? tdec + p.settle : detected ? td : tdec + p.settle;
+  const lockOk = best || first;
+  Viz.rect(ctx, f.X(lockStart), 142, Math.max(3, f.X(lockStart + p.lock) - f.X(lockStart)), 20, lockOk ? c.green : null, lockOk ? null : c.accent);
+  ctx.globalAlpha = 1;
+  Viz.label(ctx, 'khóa tần số', 6, 156, c.muted, 'left');
+  const verdict = best ? '<span class="good">chọn tốt nhất kịp</span>' : first ? '<span class="good">chỉ kịp chọn cái đầu tiên đủ tốt</span>' : '<span class="bad">preamble hết trước khi kịp khóa: lỡ gói</span>';
+  const worstOk = needBest <= L ? '<span class="good">luôn kịp</span>' : needFirst <= L ? '<span class="bad">không phải lúc nào cũng kịp, phải lùi về first good</span>' : '<span class="bad">cả first good cũng không kịp</span>';
+  return {
+    dwell: `${D} µs (${p.settle} đổi + ${p.listen} nghe)`, worstBest: `${worstBest} µs`, need: `${needBest} µs, preamble ${L} µs`,
+    msg: `Ở lúc tới này: ${verdict}. Xét mọi lúc tới: select best cần 3·${D} + ${p.lock} = ${needBest} µs, ${worstOk}; select first good cần ${needFirst} µs.`,
+  };
+});
+
+// ---------- 17b. Phân cực ----------
+Viz.sim('sim-pol', { th: (v) => v + '°' }, (p, [v], c) => {
+  const { ctx, w, h } = v;
+  Viz.title(v, c, 'Giản đồ công suất trong mặt phẳng chứa hai trục', 'mỗi cánh là hướng ăng-ten nhận được');
+  const cx = w / 2, cy = h / 2 + 8, R = Math.min(w / 2 - 36, h / 2 - 26), rad = Math.PI / 180;
+  [0.5, 1].forEach((k) => { ctx.beginPath(); ctx.arc(cx, cy, R * k, 0, Viz.TAU); ctx.strokeStyle = c.border; ctx.lineWidth = 1; ctx.stroke(); });
+  Viz.line(ctx, cx, cy - R - 6, cx, cy + R + 6, c.border); Viz.line(ctx, cx - R - 6, cy, cx + R + 6, cy, c.border);
+  const petal = (fn, col, alpha) => {
+    ctx.beginPath();
+    for (let a = 0; a <= 360; a += 2) { const r = fn(a * rad) * R, x = cx + r * Math.sin(a * rad), y = cy - r * Math.cos(a * rad); (a ? ctx.lineTo : ctx.moveTo).call(ctx, x, y); }
+    ctx.closePath(); ctx.fillStyle = col; ctx.globalAlpha = alpha; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+  };
+  petal((a) => Math.sin(a) ** 2, c.indigo, 0.3);
+  if (p.two) petal((a) => Math.cos(a) ** 2, c.ochre, 0.3);
+  // sóng tới
+  const a = p.th * rad, sx = cx + (R + 16) * Math.sin(a), sy = cy - (R + 16) * Math.cos(a);
+  Viz.arrow(ctx, sx, sy, cx + 0.15 * R * Math.sin(a), cy - 0.15 * R * Math.cos(a), c.accent, 2, 9);
+  // trục ăng-ten
+  ctx.font = '10px ' + c.mono;
+  Viz.label(ctx, 'trục ăng-ten 1', cx + 6, cy - R - 8, c.indigo, 'left');
+  if (p.two) Viz.label(ctx, 'trục ăng-ten 2', cx + R + 8, cy - 5, c.ochre, w - cx - R - 8 < 70 ? 'right' : 'left');
+  const g = (x) => (x < 1e-4 ? -Infinity : RF.toDb(x));
+  const g1 = g(Math.sin(a) ** 2), g2 = g(Math.cos(a) ** 2), gb = p.two ? Math.max(g1, g2) : g1;
+  const fmt = (x) => (x === -Infinity ? 'null (< −40 dB)' : Fmt.db(x, 2));
+  return { g1: fmt(g1), g2: p.two ? fmt(g2) : 'chưa bật', gb: fmt(gb), msg: p.two ? `Hai ăng-ten: ở mọi hướng ít nhất −3.01 dB; hướng này cho ${fmt(gb)}.` : `Một ăng-ten: dọc theo trục (0°) là null; hướng này cho ${fmt(g1)}.` };
+});
+
+// ---------- 18. Lợi ròng ----------
+(() => {
+  const cache = new Map();
+  const get = (k, d) => {
+    const key = k + '|' + d;
+    if (!cache.has(key)) cache.set(key, RF.fadingPair(200000, d, k, 777));
+    return cache.get(key);
+  };
+  Viz.sim('sim-net', { lock: (v) => v.toFixed(1) + ' dB', ins: (v) => v.toFixed(1) + ' dB' }, (p, [v], c) => {
+    const pair = get(p.k, p.d);
+    const gain = RF.diversityGain(pair, p.p), net = gain - p.lock - p.ins;
+    Ch.waterfall(v, c, {
+      title: 'Lợi ròng của antenna diversity (dB)', sub: `outage ${p.p * 100}%, cách ${p.d} λ`, ymin: -4, ymax: 12, yt: [-4, 0, 4, 8, 12], rm: 12,
+      steps: [
+        { label: 'Một\năng-ten', kind: 'abs', value: 0, color: c.faint },
+        { label: 'Chọn ăng-ten\ntốt hơn', kind: 'delta', value: gain, color: c.green },
+        { label: 'Preamble\nngắn', kind: 'delta', value: -p.lock, color: c.ochre },
+        { label: 'Công tắc', kind: 'delta', value: -p.ins, color: c.ochre },
+        { label: 'Lợi\nròng', kind: 'abs', value: net, color: net >= 0 ? c.green : c.accent },
+      ],
+    });
+    const verdict = net >= 3 ? '<span class="good">đáng làm</span>' : net >= 1 ? 'cân nhắc' : net >= 0 ? 'khó biện minh' : '<span class="bad">không đáng, còn tệ đi</span>';
+    return { gain: Fmt.pl(gain, 2) + ' dB', net: Fmt.pl(net, 2) + ' dB', lvl: Fmt.db(RF.toDb(RF.quantile(pair.a, p.p)), 1), msg: `Lợi ròng ${Fmt.pl(net, 1)} dB: ${verdict}. (Monte Carlo 200 000 mẫu.)` };
+  });
+})();
+
+// ---------- 19. Ngân sách liên kết ----------
+Viz.sim('sim-budget', {
+  ptx: (v) => Fmt.pl(v, 0) + ' dBm', g: (v) => Fmt.pl(v, 0) + ' dBi', s0: (v) => Fmt.n(v, 1) + ' dBm', d: (v) => v + ' m', n: (v) => v.toFixed(1), walls: (v) => v, lw: (v) => v + ' dB',
+  dw: (v) => v.toFixed(1) + ' m', df: (v) => v.toFixed(1) + ' MHz',
+}, (p, [v], c, s) => {
+  const pl = RF.pathLoss(p.d, p.n), wl = p.walls * p.lw;
+  const prx = p.ptx + p.g - pl - wl + p.g;
+  const pb = p.wifi ? 20 - RF.fspl(p.dw, 2.44e9) : -Infinity;
+  const R = RF.rejection(p.df);
+  const seff = RF.effSens(p.s0, pb, R);
+  const fm = -(p.div ? RF.diversityLevel(p.p) : RF.rayleighLevel(p.p));
+  const need = seff + fm, margin = prx - need;
+  Ch.waterfall(v, c, {
+    title: 'Ngân sách từ phát tới thu (dBm)', sub: margin >= 0 ? `đạt, biên ${Fmt.db(margin)}` : `thiếu ${Fmt.db(-margin)}`, ymin: -120, ymax: 25, yt: [-100, -80, -60, -40, -20, 0, 20],
+    steps: [
+      { label: 'Phát', kind: 'abs', value: p.ptx, color: c.indigo },
+      { label: 'Ăng-ten\nphát', short: 'Ăng\nten', kind: 'delta', value: p.g, color: c.green },
+      { label: 'Suy\nhao', kind: 'delta', value: -pl, color: c.faint },
+      { label: 'Tường', kind: 'delta', value: -wl, color: c.faint },
+      { label: 'Ăng-ten\nthu', short: 'Ăng\nten', kind: 'delta', value: p.g, color: c.green },
+      { label: 'Mức\nthu', kind: 'abs', value: prx, color: margin >= 0 ? c.green : c.accent },
+    ],
+    lines: [
+      { y: p.s0, text: 'S gốc', color: c.green },
+      ...(p.wifi ? [{ y: seff, text: 'S + Wi-Fi', short: 'S+WiFi', color: c.accent }] : []),
+      { y: need, text: 'cần', color: c.ochre },
+    ],
+  });
+  const row = (a, b, why, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${a}</td><td class="r">${b}</td><td class="why">${why || ''}</td></tr>`;
+  s.root.querySelector('[data-out="tbl"]').innerHTML = '<tbody>' + [
+    row('Công suất phát', Fmt.dbm(p.ptx), ''),
+    row('Ăng-ten phát', Fmt.pl(p.g, 1) + ' dB', ''),
+    row('Suy hao đường truyền', Fmt.pl(-pl, 1) + ' dB', `40.2 + 10 · ${p.n.toFixed(1)} · log₁₀(${p.d})`),
+    row('Tường', Fmt.pl(-wl, 1) + ' dB', `${p.walls} × ${p.lw} dB`),
+    row('Ăng-ten thu', Fmt.pl(p.g, 1) + ' dB', ''),
+    row('Mức thu', Fmt.dbm(prx), '', 'sum'),
+    row('Độ nhạy gốc', Fmt.dbm(p.s0), 'tạp âm nhiệt + NF + SNR'),
+    row('Blocker Wi-Fi tại hub', Fmt.dbm(pb), p.wifi ? `router +20 dBm cách ${p.dw.toFixed(1)} m` : ''),
+    row('Độ chắn R', p.wifi ? Fmt.db(R) : '–', p.wifi ? `lệch ${p.df.toFixed(1)} MHz` : ''),
+    row('Độ nhạy hiệu dụng', Fmt.dbm(seff), 'độ nhạy gốc ⊕ phần rò', 'sum'),
+    row('Biên fading', Fmt.pl(fm, 1) + ' dB', `độ tin cậy ${(100 - p.p * 100).toFixed(1).replace(/\.0$/, '')}%, ${p.div ? '2 ăng-ten độc lập' : '1 ăng-ten'}`),
+    row('Mức tối thiểu cần', Fmt.dbm(need), 'độ nhạy hiệu dụng + biên fading', 'sum'),
+    row(margin >= 0 ? 'Biên còn lại' : 'Còn thiếu', Fmt.db(margin), 'mức thu − mức cần', 'sum'),
+  ].join('') + '</tbody>';
+  const leakDominates = p.wifi && seff - p.s0 > 3;
+  return {
+    msg: margin >= 0 ? `<span class="good">Đạt:</span> biên còn ${Fmt.db(margin)}.` : `<span class="bad">Thiếu ${Fmt.db(-margin)}.</span> ` + (leakDominates ? `Wi-Fi đang giới hạn (độ nhạy hiệu dụng kém độ nhạy gốc ${Fmt.db(seff - p.s0)}): đổi kênh hay dời router có ích hơn tăng độ nhạy gốc.` : 'Tạp âm nhiệt đang giới hạn: công suất phát, ăng-ten hay độ nhạy đều có ích.'),
+  };
+});
+  </script>
+  <script type="text/plain" id="check-code">
+/* check-rf.js: tính lại mọi con số trong bài từ rf-core.js. Chạy: node check-rf.js (để cùng thư mục với rf-core.js).
+ * Mỗi mục in số liệu, và dòng "KHỚP" / "LỆCH" khi đối chiếu với con số ghi trong slide hay trong bài. */
+const RF = require('./rf-core.js');
+const f = (x, d = 1) => x.toFixed(d);
+let bad = 0;
+function expect(name, got, want, tol, known) {   // known: lệch đã biết, được giải thích trong bài
+  const ok = Math.abs(got - want) <= tol;
+  if (!ok && !known) bad++;
+  console.log(`  ${ok ? 'KHỚP' : known ? 'LỆCH (đã biết, xem mục link budget)' : 'LỆCH'}  ${name}: tính ${f(got, 2)}, ghi ${want} (sai số cho phép ${tol})`);
+}
+const head = (s) => console.log('\n== ' + s);
+
+head('1. dB, dBm');
+console.log('  +3 dB ×', f(RF.fromDb(3), 3), '; +10 dB ×', RF.fromDb(10), '; -3 dB ×', f(RF.fromDb(-3), 3));
+console.log('  20 dBm =', f(RF.dbmToMw(20), 1), 'mW ;  -100 dBm =', RF.dbmToMw(-100).toExponential(2), 'mW = 0.1 pW');
+console.log('  20 dBm so với -100 dBm: chênh', 20 - -100, 'dB = ×', RF.fromDb(120).toExponential(0));
+console.log('  hai tín hiệu bằng nhau cộng lại:', f(RF.addDbm(-90, -90), 2), 'dBm (+3.01 dB); -90 và -100:', f(RF.addDbm(-90, -100), 2), 'dBm');
+
+head('2. Tạp âm nhiệt và độ nhạy');
+console.log('  kTB 2 MHz =', f(RF.noiseDbm(2e6)), 'dBm; kTB 1 MHz =', f(RF.noiseDbm(1e6)), 'dBm');
+console.log('  độ nhạy -105.4 dBm ở 2 MHz => NF + SNR cần =', f(-105.4 - RF.noiseDbm(2e6)), 'dB');
+console.log('  chuẩn 802.15.4 -85 dBm => NF + SNR =', f(-85 - RF.noiseDbm(2e6)), 'dB');
+console.log('  ví dụ NF 4 dB, SNR 1.6 dB, 2 MHz =>', f(RF.sensitivity(2e6, 4, 1.6)), 'dBm');
+console.log('  PER ở biên 0 dB =', f(RF.per(0) * 100, 2) + '%; ở -2.5 dB =', f(RF.per(-2.5) * 100, 1) + '%; ở -5 dB =', f(RF.per(-5) * 100, 1) + '%');
+
+head('3. Suy hao');
+console.log('  FSPL 1 m, 2.44 GHz =', f(RF.PL1), 'dB; 10 m =', f(RF.fspl(10, 2.44e9)), 'dB;  nhân đôi khoảng cách =', f(RF.toDb(4)), 'dB');
+console.log('  N=4, 10 m:', f(RF.pathLoss(10, 4)), 'dB; N=3, 10 m:', f(RF.pathLoss(10, 3)), 'dB');
+console.log('  ngân sách 120 dB: tầm xa N=2', f(RF.rangeM(120, 2), 0), 'm, N=3', f(RF.rangeM(120, 3), 0), 'm, N=4', f(RF.rangeM(120, 4), 0), 'm');
+
+head('4. Link budget (slide 6, N = 4)');
+const SL = { tx: 19.5, s: -105.4 }, A = { tx: 20, s: -102 }, T = { tx: 10, s: -101 };
+const R4 = (lb) => RF.rangeM(lb, 4, RF.SLIDE_C);
+expect('A–A', R4(RF.link(A, A).limit), 156.6, 0.1);
+expect('SL–SL', R4(RF.link(SL, SL).limit), 185.1, 0.1);
+expect('SL–typical', R4(RF.link(SL, T).limit), 107.1, 0.1);
+expect('A–typical (slide ghi 83.2)', R4(RF.link(A, T).limit), 83.2, 0.1, true);
+console.log('  A–typical: chiều A→T', RF.link(A, T).ab, 'dB, chiều T→A', RF.link(A, T).ba, 'dB, giới hạn', RF.link(A, T).limit, 'dB -> tầm xa', f(R4(RF.link(A, T).limit)), 'm');
+console.log('  để ra 83.2 m cần ngân sách', f(RF.SLIDE_C + 40 * Math.log10(83.2)), 'dB (chứ không phải 112)');
+console.log('  cải thiện SL so với A với node thường: slide 29%, tính được', f((R4(RF.link(SL, T).limit) / R4(RF.link(A, T).limit) - 1) * 100, 1) + '%');
+console.log('  cải thiện SL–SL so với A–A:', f((R4(RF.link(SL, SL).limit) / R4(RF.link(A, A).limit) - 1) * 100, 1) + '%');
+
+head('5. Đổi dB sang tầm xa và diện tích');
+for (const n of [2, 3, 4]) console.log(`  N=${n}: 3 dB -> tầm xa ×${f(RF.rangeGain(3, n), 2)}, diện tích ×${f(RF.rangeGain(3, n) ** 2, 2)};  7.3 dB -> ×${f(RF.rangeGain(7.3, n), 2)}, diện tích ×${f(RF.rangeGain(7.3, n) ** 2, 2)}`);
+
+head('6. Bảng blocking của slide');
+const B = RF.BLOCK, chips = ['xG24', 'xG301', 'A', 'B'];
+console.log('  delta so với xG24 (dB), blocker -10 dBm: ', chips.map((k) => `${k} ${f(B['-10'][k][0] - B['-10'].xG24[0])}/${f(B['-10'][k][1] - B['-10'].xG24[1])}`).join('  '));
+console.log('  delta so với xG24 (dB), blocker -40 dBm: ', chips.map((k) => `${k} ${f(B['-40'][k][0] - B['-40'].xG24[0])}/${f(B['-40'][k][1] - B['-40'].xG24[1])}`).join('  '));
+const S0 = -102;
+console.log('  Mô hình tuyến tính S_eff = S0 (+) (Pb - R), S0 = -102 dBm. R suy ra từ hàng -40 dBm, dự đoán hàng -10 dBm:');
+for (const k of chips) {
+  const row = [];
+  for (let i = 0; i < 2; i++) {
+    const leak = RF.toDb(RF.fromDb(B['-40'][k][i]) - RF.fromDb(S0));
+    const R = -40 - leak, pred = RF.addDbm(S0, -10 - R);
+    row.push(`${i ? '22.5' : '12.5'} MHz: R=${f(R)} dB, dự đoán ${f(pred)}, đo ${B['-10'][k][i]}, vượt ${f(B['-10'][k][i] - pred)} dB`);
+  }
+  console.log('   ', k.padEnd(6), row.join(' | '));
+}
+console.log('  Khi blocker tăng 30 dB, độ nhạy xấu đi (tuyến tính = 30):', chips.map((k) => `${k} ${f(B['-10'][k][0] - B['-40'][k][0])}/${f(B['-10'][k][1] - B['-40'][k][1])}`).join('  '));
+console.log('  Đường cong R(Δf) dùng để vẽ:', [0, 8, 12.5, 17.5, 22.5, 30, 40].map((d) => `${d}MHz:${f(RF.rejection(d))}`).join('  '));
+
+head('7. Blocker theo khoảng cách (router Wi-Fi +20 dBm, không gian tự do)');
+console.log(' ', [0.3, 0.6, 1, 2, 3, 6, 9, 12, 20].map((d) => `${d} m: ${f(20 - RF.fspl(d, 2.44e9))} dBm`).join('  '));
+console.log('  1–2 ft = 0.30–0.61 m; 20–40 ft = 6.1–12.2 m');
+console.log('  radio Wi-Fi cùng bo, cách ly 20 dB: blocker', 20 - 20, 'dBm; cách ly 30 dB:', 20 - 30, 'dBm');
+
+head('8. Kênh 2.4 GHz');
+console.log('  802.15.4 kênh 15 =', RF.zigbeeMHz(15), 'MHz, kênh 13 =', RF.zigbeeMHz(13), ', kênh 26 =', RF.zigbeeMHz(26), '; Wi-Fi kênh 1/6/11 =', [1, 6, 11].map(RF.wifiMHz).join('/'));
+const clear = [];
+for (let ch = 11; ch <= 26; ch++) if ([1, 6, 11].every((w) => Math.abs(RF.zigbeeMHz(ch) - RF.wifiMHz(w)) >= 12)) clear.push(ch);
+console.log('  kênh 802.15.4 nằm ngoài dải 22 MHz của cả Wi-Fi 1, 6, 11:', clear.join(', '));
+console.log('  BLE quảng bá 37/38/39 =', [37, 38, 39].map(RF.bleMHz).join('/'), 'MHz');
+
+head('9. Thời gian và hình học anten');
+console.log('  ký hiệu', RF.SYMBOL_US, 'µs; preamble 802.15.4 =', RF.PREAMBLE_154_US, 'µs; preamble BLE 1M =', RF.PREAMBLE_BLE_US, 'µs; tỉ lệ ×', RF.PREAMBLE_154_US / RF.PREAMBLE_BLE_US);
+console.log('  gói 802.15.4 dài nhất (4+1+1+127 byte) =', (4 + 1 + 1 + 127) * 2 * RF.SYMBOL_US, 'µs');
+for (const [name, fh] of [['2.4 GHz', 2.4e9], ['2.44 GHz', 2.44e9], ['915 MHz', 915e6]]) console.log(`  ${name}: λ = ${f(RF.lambdaCm(fh), 2)} cm, λ/4 = ${f(RF.lambdaCm(fh) / 4, 2)} cm = ${f(RF.lambdaCm(fh) / 4 / 2.54, 2)} in`);
+
+head('10. Fading Rayleigh và chọn anten tốt nhất');
+console.log('  Một anten, ngưỡng công suất (dB so với trung bình) tại outage 50% / 10% / 1% / 0.1%:', [0.5, 0.1, 0.01, 0.001].map((p) => f(RF.rayleighLevel(p), 2)).join(' / '));
+console.log('  Hai anten độc lập, chọn tốt nhất, cùng các mức:', [0.5, 0.1, 0.01, 0.001].map((p) => f(RF.diversityLevel(p), 2)).join(' / '));
+console.log('  Lợi giải tích:', [0.5, 0.1, 0.01, 0.001].map((p) => f(RF.diversityLevel(p) - RF.rayleighLevel(p), 2)).join(' / '), 'dB; công suất trung bình tăng', f(RF.toDb(1.5), 2), 'dB');
+console.log('  Monte Carlo 200 000 mẫu, lợi (dB) tại outage 50% / 10% / 1% / 0.1%:');
+console.log('   d/λ    ρ²    trung bình   50%    10%     1%    0.1%');
+for (const d of [0, 0.05, 0.1, 0.25, 0.5, 1]) {
+  const pr = RF.fadingPair(200000, d, -Infinity, 20241115 + Math.round(d * 100));
+  const meanGain = RF.toDb(RF.mean(pr.a.map((x, i) => Math.max(x, pr.b[i]))) / RF.mean(pr.a));
+  console.log(`  ${f(d, 2).padStart(5)} ${f(RF.jakes(d) ** 2, 3).padStart(6)} ${f(meanGain, 2).padStart(10)} ${[0.5, 0.1, 0.01, 0.001].map((p) => f(RF.diversityGain(pr, p), 2).padStart(7)).join('')}`);
+}
+console.log('  Hệ số Rice K (dB): lợi tại outage 10% và 1% (hai anten cách λ/4)');
+for (const k of [-Infinity, 0, 5, 10, 15]) {
+  const pr = RF.fadingPair(200000, 0.25, k, 777);
+  console.log(`   K = ${String(k).padStart(9)}:  10% ${f(RF.diversityGain(pr, 0.1), 2).padStart(6)} dB   1% ${f(RF.diversityGain(pr, 0.01), 2).padStart(6)} dB   mức 1% của một anten ${f(RF.toDb(RF.quantile(pr.a, 0.01)), 1)} dB`);
+}
+const dip = (th) => Math.sin(th) ** 2;
+let worst = 1;
+for (let t = 0; t <= Math.PI; t += 0.005) worst = Math.min(worst, Math.max(dip(t), dip(t + Math.PI / 2)));
+console.log('  hai dipole vuông góc, hướng xấu nhất:', f(RF.toDb(worst), 2), 'dB so với đỉnh (một dipole thì null sâu vô hạn)');
+
+head('10b. Mô phỏng hai ăng-ten theo thời gian (20 000 mẫu, độ nhớ 0.93): % thời gian dưới ngưỡng');
+const base = RF.fadingBase(20000, 0.93, 31415);
+for (const [dCm, mrg] of [[0, 10], [3, 10], [12, 10], [3, 5], [3, 15]]) {
+  const rho = RF.jakes(dCm / RF.lambdaCm(2.44e9));
+  const { p1, p2 } = RF.fadingFromBase(base, rho);
+  const th = RF.fromDb(-mrg), n = p1.length;
+  let c1 = 0, c2 = 0, cb = 0;
+  for (let i = 0; i < n; i++) { if (p1[i] < th) c1++; if (p2[i] < th) c2++; if (Math.max(p1[i], p2[i]) < th) cb++; }
+  console.log(`  d = ${dCm} cm (ρ² = ${f(rho * rho, 3)}), biên ${mrg} dB: ăng-ten 1 ${f(c1 / n * 100)}%, ăng-ten 2 ${f(c2 / n * 100)}%, chọn tốt nhất ${f(cb / n * 100)}%  | lý thuyết độc lập: ${f((1 - Math.exp(-th)) * 100)}% và ${f((1 - Math.exp(-th)) ** 2 * 100, 2)}%`);
+}
+
+head('11. Hai tia');
+for (const r of [0.9, 0.7, 0.5]) console.log(`  phản xạ biên độ ${r}: cực đại ${f(RF.toDb((1 + r) ** 2), 1)} dB, cực tiểu ${f(RF.toDb((1 - r) ** 2), 1)} dB so với chỉ tia thẳng`);
+
+head('11b. Nhiều sóng tới một điểm (mô phỏng mục multipath): % vị trí thấp hơn trung bình 10 dB / 20 dB, trên 3 m');
+const lam = RF.lambdaCm(2.44e9);
+for (const [M, r] of [[0, 0], [1, 0.9], [3, 1.2], [10, 2.0], [10, 4.0]]) {
+  const v = [];
+  for (let i = 0; i < 3000; i++) v.push(RF.multipath(i * 0.1, M, r, lam));
+  const m = RF.mean(v), db = v.map((x) => RF.toDb(x));
+  const below = (t) => db.filter((x) => x < RF.toDb(m) + t).length / v.length * 100;
+  console.log(`  M=${M} r=${r}: so với tia thẳng min ${f(Math.min(...db))} dB, max ${f(Math.max(...db))} dB; so với trung bình: dưới -10 dB ${f(below(-10))}%, dưới -20 dB ${f(below(-20))}%`);
+}
+console.log('  λ/2 =', f(lam / 2, 2), 'cm (khoảng cách giữa hai hố của sóng đứng); Rayleigh lý thuyết: dưới -10 dB', f((1 - Math.exp(-0.1)) * 100), '%, dưới -20 dB', f((1 - Math.exp(-0.01)) * 100, 2), '%');
+
+head('12. Mesh');
+console.log(' ', [14, 16, 20, 24, 32, 40, 55].map((R) => { const p = RF.meshPath(R); return `R=${R} m: ${p.length - 1} hop`; }).join('  '));
+for (const h of [1, 2, 3, 4, 6]) console.log(`  mỗi hop thành công 95%: ${h} hop -> ${f(Math.pow(0.95, h) * 100, 1)}%`);
+
+head('13. Thử lại và OTA');
+const frames = Math.ceil(256 * 1024 / 100);
+console.log('  256 KiB / 100 byte mỗi gói =', frames, 'gói; mỗi lần thử 6 ms ->', f(frames * 0.006, 1), 's khi PER 0');
+for (const p of [0.1, 0.3, 0.5, 0.7, 0.8]) console.log(`  PER ${p * 100}%: số lần thử trung bình ${f(RF.expAttempts(p, 99), 2)}, OTA ${f(frames * 0.006 * RF.expAttempts(p, 99), 1)} s; với 3 lần thử lại xác suất giao được ${f(RF.delivery(p, 3) * 100, 1)}%`);
+
+head('14. Mô phỏng tổng: giá trị mặc định');
+function main(d, n, ptx, s0, dw, df, wifi) {
+  const prx = ptx - RF.pathLoss(d, n), pb = wifi ? 20 - RF.fspl(dw, 2.44e9) : -Infinity;
+  const s = RF.effSens(s0, pb, RF.rejection(df));
+  return { prx, pb, s, margin: prx - s, per: RF.per(prx - s) };
+}
+for (const [d, n, ptx, s0, dw, df, wifi] of [[30, 3.2, 10, -101, 3, 22.5, true], [30, 3.2, 10, -101, 0.3, 22.5, true], [60, 3.2, 10, -101, 3, 22.5, true], [60, 3.2, 10, -101, 3, 22.5, false]]) {
+  const r = main(d, n, ptx, s0, dw, df, wifi);
+  console.log(`  d=${d} m N=${n} Ptx=${ptx} S0=${s0} router ${dw} m Δ=${df} wifi=${wifi}: Prx ${f(r.prx)}, blocker ${f(r.pb)}, S_eff ${f(r.s)}, biên ${f(r.margin)} dB, PER ${f(r.per * 100, 1)}%`);
+}
+
+console.log('\n' + (bad ? `CÓ ${bad} DÒNG LỆCH` : 'Mọi dòng đối chiếu đều khớp.'));
+  </script>
+</body>
+</html>
