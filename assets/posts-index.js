@@ -27,6 +27,20 @@ window.POSTS = [
     "summary": "Đi qua từng khối của một pipeline DSP cho dữ liệu cảm biến: lấy mẫu, Q-format, FIR, cửa sổ trượt, detrend, RMS và kurtosis, FFT, band energy. Mỗi phần có mô phỏng riêng để tự chỉnh tham số và một ví dụ tính tay để kiểm lại."
   },
   {
+    "slug": "fourier-to-laplace",
+    "title": "Từ Fourier tới Laplace: tách tần số trong tín hiệu và giữ cho máy móc ổn định",
+    "date": "2026-11-15",
+    "tags": [
+      "fourier",
+      "laplace",
+      "xử lý tín hiệu",
+      "điều khiển",
+      "simulation"
+    ],
+    "summary": "Biến đổi Fourier và Laplace dựng từ một hợp âm: sóng sin, tổng các sóng, sóng thử nhân rồi lấy trung bình, FFT, mặt phẳng s, đạo hàm thành phép nhân, cực và sự ổn định. Đi theo đúng tám phân cảnh của một video giải thích, mỗi phần có mô phỏng riêng và một ví dụ tính tay. Cuối bài là năm ca công nghiệp (rung động máy quay, hài điện lưới, lọc nhiễu lưới, vòng PI, đọc cực từ dao động tắt dần) cùng cách nhận biết khi nào dùng Fourier, khi nào dùng Laplace.",
+    "coverSvg": "<svg viewBox=\"0 0 320 180\">\n      <path class=\"hair\" d=\"M16 90h138\"/>\n      <path class=\"soft\" d=\"M16 90c9-36 18-36 27 0s18 36 27 0 18-36 27 0 18 36 27 0\"/>\n      <path class=\"line thick\" d=\"M16 90c8-52 22 12 30-6s16-44 30-8 18 34 34 6 12-26 16-6\"/>\n      <path class=\"pale\" d=\"M176 24h66v132h-66z\"/>\n      <path class=\"hair\" d=\"M242 24v132M176 90h130\"/>\n      <path class=\"line thick\" d=\"M206 62l12 12M218 62l-12 12M206 106l12 12M218 106l-12 12\"/>\n      <path class=\"line dash\" d=\"M242 90c20-30 40-30 56 0\"/>\n    </svg>"
+  },
+  {
     "slug": "how-bldc-works",
     "title": "Động cơ BLDC hoạt động thế nào: nam châm, sáu bước chuyển mạch, cảm biến Hall và vòng PI",
     "date": "2026-11-11",
@@ -40,32 +54,30 @@ window.POSTS = [
     "coverSvg": "<svg viewBox=\"0 0 320 180\">\r\n      <circle class=\"soft\" cx=\"104\" cy=\"90\" r=\"64\"/>\r\n      <circle class=\"line\" cx=\"104\" cy=\"90\" r=\"64\"/>\r\n      <path class=\"hair\" d=\"M104 26v14M104 154v-14M48.6 58l12.1 7M159.4 122l-12.1-7M48.6 122l12.1-7M159.4 58l-12.1 7\"/>\r\n      <circle class=\"ink\" cx=\"104\" cy=\"90\" r=\"26\"/>\r\n      <path class=\"pale\" d=\"M104 90l24-15 6 10z\"/>\r\n      <path class=\"line thick\" d=\"M104 90l26-16\"/>\r\n      <path class=\"hair\" d=\"M196 124h12l12-34 12 0 12 34 12 0 12-34\"/>\r\n      <path class=\"line thick\" d=\"M190 112l10-28h30l10 28 10 28h30l10-28\"/>\r\n      <path class=\"hair\" d=\"M190 90h122\"/>\r\n    </svg>"
   },
   {
-    "slug": "rf-iot-tcu-wireless",
-    "title": "RF trong IoT và TCU ô tô: từ link budget đến khung dữ liệu trên không",
-    "date": "2026-11-03",
+    "slug": "rf-iot-802154",
+    "title": "Truyền thông không dây: từ bản chất đến IEEE 802.15.4",
+    "date": "2026-11-16",
     "tags": [
       "rf",
       "iot",
-      "tcu",
-      "không dây",
-      "automotive",
-      "bảo mật"
+      "wireless",
+      "802.15.4",
+      "simulation"
     ],
-    "summary": "Từ vật lý của sóng vô tuyến (dB, link budget, fading) qua BLE, UWB, LoRa/LoRaWAN, NB-IoT/LTE-M, vệ tinh NTN, tới TCU ô tô (CAN, eCall, OTA, V2X, chìa khóa số) và các cách tấn công vô tuyến. Mỗi phần có mô phỏng riêng, khung dữ liệu tính từng byte và các tình huống lỗi kèm cách chẩn đoán.",
-    "cover": "packets"
+    "summary": "Dạy bản chất truyền thông không dây cho người chưa làm RF, rồi đi sâu vào IEEE 802.15.4 (lớp vật lý của Zigbee và Thread): sóng, chip, dB, suy hao, độ nhạy, Wi-Fi, fading, gói tin, CSMA-CA, nhảy kênh, mesh, diversity và chẩn đoán một mạng Zigbee chập chờn. Mọi con số có nguồn.",
+    "coverSvg": "<svg viewBox=\"0 0 320 180\">\n      <path class=\"hair\" d=\"M24 150h272\"/>\n      <circle class=\"ink\" cx=\"70\" cy=\"104\" r=\"7\"/>\n      <path class=\"line thick\" d=\"M70 104V66\"/>\n      <path class=\"line\" d=\"M92 88A30 30 0 0 1 92 120\"/><path class=\"line\" d=\"M108 76A52 52 0 0 1 108 132\"/><path class=\"line\" d=\"M124 64A74 74 0 0 1 124 144\"/>\n      <path class=\"soft\" d=\"M196 150V96h10v54zM214 150v-34h10v34zM232 150V78h10v72zM250 150v-48h10v48zM268 150V88h10v62z\"/>\n      <path class=\"hair dash\" d=\"M178 120h118\"/>\n    </svg>"
   },
   {
     "slug": "solid-principles",
-    "title": "SOLID: năm nguyên tắc thiết kế, từ ví dụ nhỏ đến module firmware",
+    "title": "SOLID: năm nguyên tắc thiết kế qua những ví dụ đời thường",
     "date": "2026-11-03",
     "tags": [
       "solid",
+      "lập trình hướng đối tượng",
       "kiến trúc phần mềm",
-      "embedded",
-      "firmware",
-      "automotive"
+      "embedded"
     ],
-    "summary": "Năm nguyên tắc SOLID giải thích bằng ví dụ C nhỏ, mỗi nguyên tắc có mô phỏng riêng và một ví dụ tính tay để kiểm lại. Sau đó ráp thành một module điều khiển quạt chạy thật và áp dụng vào embedded, firmware, automotive.",
+    "summary": "Năm nguyên tắc SOLID giải thích bằng hình ảnh đời thường (nĩa và muỗng, máy trộn, mèo Tom, bảng nút, ổ cắm điện) rồi bằng đúng hình ảnh đó trong code. Mỗi phần có mô phỏng chạy code thật và một ví dụ tính tay.",
     "cover": "blocks"
   },
   {
